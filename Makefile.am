@@ -12,10 +12,9 @@ libxbapi_la_include_HEADERS = include/xbapi.h
 
 check_PROGRAMS = cunit
 
-cunit_SOURCES = test/src/xbapi.c
+cunit_SOURCES = test/src/cunit.c $(libxbapi_la_SOURCES)
 cunit_CFLAGS = -I$(srcdir)/include -I$(srcdir)/test/include $(TALLOC_CFLAGS) $(CUNIT_CFLAGS)
 cunit_LDFLAGS = $(TALLOC_LIBS) $(CUNIT_LIBS)
-cunit_LDADD = libxbapi.la
 
 TESTS = $(check_PROGRAMS)
 

@@ -67,7 +67,7 @@ xbapi_rc_t xbapi_escape( uint8_t **buf ) {
 	assert(buf != NULL);
 	assert(*buf != NULL);
 	uint8_t *b = *buf;
-	size_t blen = talloc_array_length(b), retlen;
+	size_t blen = talloc_array_length(b), retlen = 0;
 	for( size_t i = 0; i < blen; i++ ) if( is_control(b[i]) ) retlen++;
 	// Check for overflow
 	if( SIZE_MAX - retlen < blen ) return xbapi_rc(XBAPI_ERR_OVERFLOW);
@@ -87,26 +87,4 @@ xbapi_rc_t xbapi_escape( uint8_t **buf ) {
 	} while( retidx--, bidx --> 0 );
 
 	return xbapi_rc(XBAPI_ERR_NOERR);
-}
-
-static void test_xbapi_escape() {
-	sleep(10);
-	xbapi_rc_t rc;
-	uint8_t *buf;
-	if( (buf = talloc_array(NULL, uint8_t, 2)) == NULL ) xbapi_die("talloc_array", xbapi_rc_sys());
-	buf[0] = 0x23;
-	buf[1] = 0x11;
-	if( xbapi_errno(rc = xbapi_escape(&buf)) != XBAPI_ERR_NOERR ) xbapi_die("xbapi_escape", rc);
-	size_t datalen = talloc_array_length(buf);
-	if( (buf = talloc_realloc(NULL, buf, uint8_t, datalen + 4)) == NULL ) xbapi_die("talloc_realloc", xbapi_rc_sys());
-	memmove(buf + 3, buf, datalen);
-	buf[0] = 0x7E;
-	buf[1] = 0x00;
-	buf[2] = 0x02;
-	buf[5] = 0xCB;
-	for( size_t i = 0; i < talloc_array_length(buf); i++ ) {
-		printf("0x%02X ", buf[i]);
-	}
-	printf("\n");
-	TALLOC_FREE(buf);
 }
