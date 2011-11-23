@@ -104,11 +104,7 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	// TODO: This is endian specific
 	uint16_t dlen = (b[1] << 8) | b[2];
 	uint8_t checksum = b[blen - 1], runningChecksum = 0;
-	for( size_t i = 3; i < blen - 1; i++ ) {
-		uint16_t sum = runningChecksum + b[i];
-		runningChecksum = (uint8_t) sum;
-	}
-	// TODO: Underflow possible?
+	for( size_t i = 3; i < blen - 1; i++ ) runningChecksum += b[i];
 	runningChecksum = 0xFF - runningChecksum;
 	if( runningChecksum != checksum ) return xbapi_rc(XBAPI_ERR_BADPACKET);
 	memmove(b, b + 3, dlen);
