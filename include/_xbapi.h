@@ -3,7 +3,8 @@
 #else /* ___XBAPI_H__ */
 #define ___XBAPI_H__
 
-xbapi_rc_t xbapi_escape( uint8_t **buf );
+static xbapi_rc_t xbapi_escape( uint8_t **buf );
+static xbapi_rc_t xbapi_unescape( uint8_t **buf );
 
 #define XBAPI_FRAME_DELIM   0x7E
 #define XBAPI_ESCAPE        0x7D

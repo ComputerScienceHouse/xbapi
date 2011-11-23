@@ -42,7 +42,8 @@ const char *xbapi_strerror( xbapi_rc_t rc ) {
 		[XBAPI_ERR_NOERR] = "No error",
 		[XBAPI_ERR_SYS] = "System error",
 		[XBAPI_ERR_OVERFLOW] = "Overflow",
-		[XBAPI_ERR_BADPACKET] = "Bad packet"
+		[XBAPI_ERR_BADPACKET] = "Bad packet",
+		[XBAPI_ERR_BUFBIG] = "Buffer too big"
 	};
 	if( rc.code == XBAPI_ERR_SYS ) {
 		return strerror(rc.sys_errno);
@@ -65,7 +66,38 @@ static bool is_control( uint8_t byte ) {
 }
 
 // buf must be talloc'ed
-xbapi_rc_t xbapi_escape( uint8_t **buf ) {
+static xbapi_rc_t xbapi_unescape( uint8_t **buf ) {
+	assert(buf != NULL);
+	assert(*buf != NULL);
+
+	uint8_t *b = *buf;
+	size_t blen = talloc_array_length(b), retlen = blen;
+	if( blen < 2 ) return xbapi_rc(XBAPI_ERR_NOERR);
+
+	for( size_t i = 0; i < blen; i++ ) if( b[i] == XBAPI_ESCAPE ) retlen--;
+
+	size_t retidx = 0, bidx = 0;
+	do {
+		if( b[bidx] == XBAPI_ESCAPE ) {
+			bidx++;
+			if( bidx >= blen ) return xbapi_rc(XBAPI_ERR_BADPACKET);
+			b[retidx] = b[bidx] ^ 0x20;
+		} else if( retidx != bidx ) {
+			b[retidx] = b[bidx];
+		}
+	} while( ++retidx, ++bidx < blen );
+
+	uint8_t *ret = talloc_realloc_size(NULL, b, retlen);
+	// Since we are shrinking, this should never fail.
+	// If it does though, there is no better recourse.
+	if( ret == NULL ) abort();
+
+	*buf = ret;
+	return xbapi_rc(XBAPI_ERR_NOERR);
+}
+
+// buf must be talloc'ed
+static xbapi_rc_t xbapi_escape( uint8_t **buf ) {
 	assert(buf != NULL);
 	assert(*buf != NULL);
 
@@ -109,23 +141,26 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	assert(blen >= 5);
 
 	uint16_t dlen = ntohs(*((uint16_t *) (b + 1)));
-	uint8_t checksum = 0;
+	uint8_t checksum = b[blen - 1];
 
-	for( size_t i = 3; i < blen; i++ ) checksum += b[i];
-	if( checksum != 0xFF ) return xbapi_rc(XBAPI_ERR_BADPACKET);
+	size_t dlen_esc = blen - 4;
 
-	uint8_t temph[3];
-	memcpy(temph, b, 3);
-	memmove(b, b + 3, dlen);
+	memmove(b, b + 3, dlen_esc);
 
-	uint8_t *ret = talloc_realloc_size(NULL, b, dlen);
-	if( ret == NULL ) {
-		int eno = errno;
-		memmove(b + 3, b, dlen);
-		memcpy(b, temph, 3);
-		errno = eno;
-		return xbapi_rc_sys();
-	}
+	uint8_t *ret = talloc_realloc_size(NULL, b, dlen_esc);
+	// There's no easy recourse if this fails.
+	// It shouldn't though since we're shrinking.
+	if( ret == NULL ) abort();
+
+	xbapi_rc_t rc;
+	if( xbapi_errno(rc = xbapi_unescape(buf)) != XBAPI_ERR_NOERR ) return rc;
+	b = *buf;
+	assert(talloc_array_length(b) == dlen);
+
+	uint8_t tmpsum = 0;
+	for( size_t i = 0; i < dlen; i++ ) tmpsum += b[i];
+	tmpsum += checksum;
+	if( tmpsum != 0xFF ) return xbapi_rc(XBAPI_ERR_BADPACKET);
 
 	*buf = ret;
 	return xbapi_rc(XBAPI_ERR_NOERR);
@@ -142,18 +177,27 @@ xbapi_rc_t xbapi_wrap( uint8_t **buf ) {
 
 	if( blen > 65535 ) return xbapi_rc(XBAPI_ERR_BUFBIG);
 
+	// Calculate checksum _before_ escaping
 	uint8_t checksum = 0;
 	for( size_t i = 0; i < blen; i++ ) {
 		checksum += b[i];
 	}
 	checksum = 0xFF - checksum;
 
+	// Save the len before escaping so we can put it in the packet.
+	uint16_t packetlen = blen;
+
+	xbapi_rc_t rc;
+	if( xbapi_errno(rc = xbapi_escape(buf)) != XBAPI_ERR_NOERR ) return rc;
+	b = *buf;
+	blen = talloc_array_length(b);
+
 	uint8_t *ret = talloc_realloc_size(NULL, b, blen + 4);
 	if( ret == NULL ) return xbapi_rc_sys();
 
 	memmove(ret + 3, ret, blen);
 	ret[0] = XBAPI_FRAME_DELIM;
-	*((uint16_t *) (ret + 1)) = htons(blen);
+	*((uint16_t *) (ret + 1)) = htons(packetlen);
 	ret[blen + 3] = checksum;
 
 	*buf = ret;
