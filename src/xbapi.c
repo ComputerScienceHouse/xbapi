@@ -104,11 +104,14 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	uint8_t checksum = 0;
 	for( size_t i = 3; i < blen; i++ ) checksum += b[i];
 	if( checksum != 0xFF ) return xbapi_rc(XBAPI_ERR_BADPACKET);
+	uint8_t temph[3];
+	memmove(temph, b, 3);
 	memmove(b, b + 3, dlen);
 	uint8_t *ret = talloc_realloc_size(NULL, b, dlen);
 	if( ret == NULL ) {
 		int eno = errno;
-		// Shit. TODO: Undo our destructive work to b.
+		memmove(b + 3, b, dlen);
+		memmove(b, temph, 3);
 		errno = eno;
 		return xbapi_rc_sys();
 	}
@@ -123,7 +126,7 @@ xbapi_rc_t xbapi_wrap( uint8_t **buf ) {
 	uint8_t *b = *buf;
 	size_t blen = talloc_array_length(b);
 	assert(blen >= 1);
-	if( blen > 65535 ) return xbapi_rc(XBAPI_ERR_BUFBIG); 
+	if( blen > 65535 ) return xbapi_rc(XBAPI_ERR_BUFBIG);
 	uint8_t checksum = 0;
 	for( size_t i = 0; i < blen; i++ ) {
 		checksum += b[i];
