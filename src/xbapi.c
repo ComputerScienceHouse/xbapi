@@ -139,10 +139,16 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	uint8_t *b = *buf;
 	if( b[0] != XBAPI_FRAME_DELIM ) return xbapi_rc(XBAPI_ERR_BADPACKET);
 
+	xbapi_rc_t rc;
+	if( xbapi_errno(rc = xbapi_unescape(buf)) != XBAPI_ERR_NOERR ) return rc;
+	b = *buf;
+
 	size_t blen = talloc_array_length(b);
 	assert(blen >= 5);
 
+
 	uint16_t dlen = ntohs(*((uint16_t *) (b + 1)));
+	assert(blen == (dlen + 4u));
 	uint8_t checksum = b[blen - 1];
 	size_t dlen_esc = blen - 4;
 
@@ -152,11 +158,6 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	if( (ret = talloc_realloc_size(NULL, b, dlen_esc)) == NULL ) return xbapi_rc_sys();
 	b = ret;
 	*buf = b;
-
-	xbapi_rc_t rc;
-	if( xbapi_errno(rc = xbapi_unescape(buf)) != XBAPI_ERR_NOERR ) return rc;
-	b = *buf;
-	assert(talloc_array_length(b) == dlen);
 
 	uint8_t tmpsum = 0;
 	for( size_t i = 0; i < dlen; i++ ) tmpsum += b[i];
@@ -190,20 +191,23 @@ xbapi_rc_t xbapi_wrap( uint8_t **buf ) {
 	// Save the len before escaping so we can put it in the packet.
 	uint16_t packetlen = blen;
 
-	xbapi_rc_t rc;
-	if( xbapi_errno(rc = xbapi_escape(buf)) != XBAPI_ERR_NOERR ) return rc;
-	b = *buf;
-	blen = talloc_array_length(b);
-
 	uint8_t *ret;
 	if( (ret = talloc_realloc_size(NULL, b, blen + 4)) == NULL ) return xbapi_rc_sys();
 	b = ret;
-	*buf = b;
 
+	// Prepend the frame header leaving out the delimiter
+	// (we don't want to escape it)
 	memmove(b + 3, b, blen);
-	b[0] = XBAPI_FRAME_DELIM;
+	b[0] = 0;
 	*((uint16_t *) (b + 1)) = htons(packetlen);
 	b[blen + 3] = checksum;
+
+	*buf = b;
+	xbapi_rc_t rc;
+	if( xbapi_errno(rc = xbapi_escape(buf)) != XBAPI_ERR_NOERR ) return rc;
+
+	// Restore the frame delimiter after we've escaped
+	b[0] = XBAPI_FRAME_DELIM;
 
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
