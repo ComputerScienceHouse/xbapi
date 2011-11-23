@@ -66,6 +66,7 @@ static bool is_control( uint8_t byte ) {
 }
 
 // buf must be talloc'ed
+// if an error occurs, the data in buf is indeterminate
 static xbapi_rc_t xbapi_unescape( uint8_t **buf ) {
 	assert(buf != NULL);
 	assert(*buf != NULL);
@@ -87,12 +88,11 @@ static xbapi_rc_t xbapi_unescape( uint8_t **buf ) {
 		}
 	} while( ++retidx, ++bidx < blen );
 
-	uint8_t *ret = talloc_realloc_size(NULL, b, retlen);
-	// Since we are shrinking, this should never fail.
-	// If it does though, there is no better recourse.
-	if( ret == NULL ) abort();
+	uint8_t *ret;
+	if( (ret = talloc_realloc_size(NULL, b, retlen)) == NULL ) return xbapi_rc_sys();
+	b = ret;
+	*buf = b;
 
-	*buf = ret;
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
 
@@ -110,8 +110,10 @@ static xbapi_rc_t xbapi_escape( uint8_t **buf ) {
 	if( SIZE_MAX - retlen < blen ) return xbapi_rc(XBAPI_ERR_OVERFLOW);
 	retlen += blen;
 
-	uint8_t *ret = talloc_realloc_size(NULL, b, retlen);
-	if( ret == NULL ) return xbapi_rc_sys();
+	uint8_t *ret;
+	if( (ret = talloc_realloc_size(NULL, b, retlen)) == NULL ) return xbapi_rc_sys();
+	b = ret;
+	*buf = b;
 
 	size_t retidx = retlen - 1, bidx = blen - 1;
 
@@ -125,11 +127,11 @@ static xbapi_rc_t xbapi_escape( uint8_t **buf ) {
 		if( bidx != 0 ) assert(retidx != 0);
 	} while( retidx--, bidx --> 0 );
 
-	*buf = ret;
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
 
 // buf must be talloc'ed
+// if an error occurs, the data in buf is indeterminate
 xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	assert(buf != NULL);
 	assert(*buf != NULL);
@@ -142,15 +144,14 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 
 	uint16_t dlen = ntohs(*((uint16_t *) (b + 1)));
 	uint8_t checksum = b[blen - 1];
-
 	size_t dlen_esc = blen - 4;
 
 	memmove(b, b + 3, dlen_esc);
 
-	uint8_t *ret = talloc_realloc_size(NULL, b, dlen_esc);
-	// There's no easy recourse if this fails.
-	// It shouldn't though since we're shrinking.
-	if( ret == NULL ) abort();
+	uint8_t *ret;
+	if( (ret = talloc_realloc_size(NULL, b, dlen_esc)) == NULL ) return xbapi_rc_sys();
+	b = ret;
+	*buf = b;
 
 	xbapi_rc_t rc;
 	if( xbapi_errno(rc = xbapi_unescape(buf)) != XBAPI_ERR_NOERR ) return rc;
@@ -161,15 +162,14 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	for( size_t i = 0; i < dlen; i++ ) tmpsum += b[i];
 	tmpsum += checksum;
 	if( tmpsum != 0xFF ) {
-		// TODO: Need to restore lost state
 		return xbapi_rc(XBAPI_ERR_BADPACKET);
 	}
 
-	*buf = ret;
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
 
 // buf must be talloc'ed
+// if an error occurs, the data in buf is indeterminate
 xbapi_rc_t xbapi_wrap( uint8_t **buf ) {
 	assert(buf != NULL);
 	assert(*buf != NULL);
@@ -195,14 +195,15 @@ xbapi_rc_t xbapi_wrap( uint8_t **buf ) {
 	b = *buf;
 	blen = talloc_array_length(b);
 
-	uint8_t *ret = talloc_realloc_size(NULL, b, blen + 4);
-	if( ret == NULL ) return xbapi_rc_sys();
+	uint8_t *ret;
+	if( (ret = talloc_realloc_size(NULL, b, blen + 4)) == NULL ) return xbapi_rc_sys();
+	b = ret;
+	*buf = b;
 
-	memmove(ret + 3, ret, blen);
-	ret[0] = XBAPI_FRAME_DELIM;
-	*((uint16_t *) (ret + 1)) = htons(packetlen);
-	ret[blen + 3] = checksum;
+	memmove(b + 3, b, blen);
+	b[0] = XBAPI_FRAME_DELIM;
+	*((uint16_t *) (b + 1)) = htons(packetlen);
+	b[blen + 3] = checksum;
 
-	*buf = ret;
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
