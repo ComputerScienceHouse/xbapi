@@ -160,7 +160,10 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	uint8_t tmpsum = 0;
 	for( size_t i = 0; i < dlen; i++ ) tmpsum += b[i];
 	tmpsum += checksum;
-	if( tmpsum != 0xFF ) return xbapi_rc(XBAPI_ERR_BADPACKET);
+	if( tmpsum != 0xFF ) {
+		// TODO: Need to restore lost state
+		return xbapi_rc(XBAPI_ERR_BADPACKET);
+	}
 
 	*buf = ret;
 	return xbapi_rc(XBAPI_ERR_NOERR);
