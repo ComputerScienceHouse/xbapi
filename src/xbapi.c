@@ -68,14 +68,19 @@ static bool is_control( uint8_t byte ) {
 xbapi_rc_t xbapi_escape( uint8_t **buf ) {
 	assert(buf != NULL);
 	assert(*buf != NULL);
+
 	uint8_t *b = *buf;
 	size_t blen = talloc_array_length(b), retlen = 0;
+
 	for( size_t i = 0; i < blen; i++ ) if( is_control(b[i]) ) retlen++;
+
 	// Check for overflow
 	if( SIZE_MAX - retlen < blen ) return xbapi_rc(XBAPI_ERR_OVERFLOW);
 	retlen += blen;
+
 	uint8_t *ret = talloc_realloc_size(NULL, b, retlen);
 	if( ret == NULL ) return xbapi_rc_sys();
+
 	size_t retidx = retlen - 1, bidx = blen - 1;
 
 	do {
@@ -96,17 +101,23 @@ xbapi_rc_t xbapi_escape( uint8_t **buf ) {
 xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	assert(buf != NULL);
 	assert(*buf != NULL);
+
 	uint8_t *b = *buf;
 	if( b[0] != XBAPI_FRAME_DELIM ) return xbapi_rc(XBAPI_ERR_BADPACKET);
+
 	size_t blen = talloc_array_length(b);
 	assert(blen >= 5);
+
 	uint16_t dlen = ntohs(*((uint16_t *) (b + 1)));
 	uint8_t checksum = 0;
+
 	for( size_t i = 3; i < blen; i++ ) checksum += b[i];
 	if( checksum != 0xFF ) return xbapi_rc(XBAPI_ERR_BADPACKET);
+
 	uint8_t temph[3];
 	memmove(temph, b, 3);
 	memmove(b, b + 3, dlen);
+
 	uint8_t *ret = talloc_realloc_size(NULL, b, dlen);
 	if( ret == NULL ) {
 		int eno = errno;
@@ -115,6 +126,7 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 		errno = eno;
 		return xbapi_rc_sys();
 	}
+
 	*buf = ret;
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
@@ -123,21 +135,27 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 xbapi_rc_t xbapi_wrap( uint8_t **buf ) {
 	assert(buf != NULL);
 	assert(*buf != NULL);
+
 	uint8_t *b = *buf;
 	size_t blen = talloc_array_length(b);
 	assert(blen >= 1);
+
 	if( blen > 65535 ) return xbapi_rc(XBAPI_ERR_BUFBIG);
+
 	uint8_t checksum = 0;
 	for( size_t i = 0; i < blen; i++ ) {
 		checksum += b[i];
 	}
 	checksum = 0xFF - checksum;
+
 	uint8_t *ret = talloc_realloc_size(NULL, b, blen + 4);
 	if( ret == NULL ) return xbapi_rc_sys();
+
 	memmove(ret + 3, ret, blen);
 	ret[0] = XBAPI_FRAME_DELIM;
 	*((uint16_t *) (ret + 1)) = htons(blen);
 	ret[blen + 3] = checksum;
+
 	*buf = ret;
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
