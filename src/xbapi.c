@@ -86,5 +86,6 @@ xbapi_rc_t xbapi_escape( uint8_t **buf ) {
 		if( bidx != 0 ) assert(retidx != 0);
 	} while( retidx--, bidx --> 0 );
 
+	*buf = ret;
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
