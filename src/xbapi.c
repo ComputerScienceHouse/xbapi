@@ -115,14 +115,14 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	if( checksum != 0xFF ) return xbapi_rc(XBAPI_ERR_BADPACKET);
 
 	uint8_t temph[3];
-	memmove(temph, b, 3);
+	memcpy(temph, b, 3);
 	memmove(b, b + 3, dlen);
 
 	uint8_t *ret = talloc_realloc_size(NULL, b, dlen);
 	if( ret == NULL ) {
 		int eno = errno;
 		memmove(b + 3, b, dlen);
-		memmove(b, temph, 3);
+		memcpy(b, temph, 3);
 		errno = eno;
 		return xbapi_rc_sys();
 	}
