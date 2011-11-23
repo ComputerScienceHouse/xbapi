@@ -125,7 +125,7 @@ xbapi_rc_t xbapi_wrap( uint8_t **buf ) {
 	uint8_t *b = *buf;
 	size_t blen = talloc_array_length(b);
 	assert(blen >= 1);
-	if( blen > 65536 ) return xbapi_rc(XBAPI_ERR_BUFBIG); 
+	if( blen > 65535 ) return xbapi_rc(XBAPI_ERR_BUFBIG); 
 	uint8_t checksum = 0;
 	for( size_t i = 0; i < blen; i++ ) {
 		checksum += b[i];
