@@ -97,10 +97,8 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	assert(*buf != NULL);
 	uint8_t *b = *buf;
 	if( b[0] != 0x7E ) return xbapi_rc(XBAPI_ERR_BADPACKET);
-#ifndef NDEBUG
 	size_t blen = talloc_array_length(b);
 	assert(blen >= 5);
-#endif
 	// TODO: This is endian specific
 	uint16_t dlen = (b[1] << 8) | b[2];
 	uint8_t checksum = b[blen - 1], runningChecksum = 0;
