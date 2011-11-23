@@ -100,8 +100,6 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	if( b[0] != XBAPI_FRAME_DELIM ) return xbapi_rc(XBAPI_ERR_BADPACKET);
 	size_t blen = talloc_array_length(b);
 	assert(blen >= 5);
-	// TODO: This is endian specific
-	//uint16_t dlen = (b[1] << 8) | b[2];
 	uint16_t dlen = ntohs(*((uint16_t *) (b + 1)));
 	uint8_t checksum = 0;
 	for( size_t i = 3; i < blen; i++ ) checksum += b[i];
