@@ -32,17 +32,9 @@ static void test_xbapi_escape() {
 	buf[0] = 0x23;
 	buf[1] = 0x11;
 	if( xbapi_errno(rc = xbapi_escape(&buf)) != XBAPI_ERR_NOERR ) xbapi_die("xbapi_escape", rc);
-	size_t datalen = talloc_array_length(buf);
-	if( (buf = talloc_realloc(NULL, buf, uint8_t, datalen + 4)) == NULL ) xbapi_die("talloc_realloc", xbapi_rc_sys());
-	memmove(buf + 3, buf, datalen);
-	buf[0] = 0x7E;
-	buf[1] = 0x00;
-	buf[2] = 0x02;
-	buf[datalen + 3] = 0xCB;
-	uint8_t expected[] = { 0x7E, 0x00, 0x02, 0x23, 0x7D, 0x31, 0xCB };
+	uint8_t expected[] = { 0x23, 0x7D, 0x31 };
 	size_t buflen = talloc_array_length(buf);
-	CU_ASSERT_EQUAL(datalen, 3);
-	CU_ASSERT_EQUAL(buflen, 7);
+	CU_ASSERT_EQUAL(buflen, 3);
 	for( size_t i = 0; i < buflen; i++ ) CU_ASSERT_EQUAL(buf[i], expected[i]);
 	TALLOC_FREE(buf);
 }
