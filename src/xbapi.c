@@ -40,7 +40,8 @@ const char *xbapi_strerror( xbapi_rc_t rc ) {
 	static char * const errors[] = {
 		[XBAPI_ERR_NOERR] = "No error",
 		[XBAPI_ERR_SYS] = "System error",
-		[XBAPI_ERR_OVERFLOW] = "Overflow"
+		[XBAPI_ERR_OVERFLOW] = "Overflow",
+		[XBAPI_ERR_BADPACKET] = "Bad packet"
 	};
 	if( rc.code == XBAPI_ERR_SYS ) {
 		return strerror(rc.sys_errno);
@@ -72,7 +73,7 @@ xbapi_rc_t xbapi_escape( uint8_t **buf ) {
 	// Check for overflow
 	if( SIZE_MAX - retlen < blen ) return xbapi_rc(XBAPI_ERR_OVERFLOW);
 	retlen += blen;
-	void *ret = talloc_realloc_size(NULL, b, retlen);
+	uint8_t *ret = talloc_realloc_size(NULL, b, retlen);
 	if( ret == NULL ) return xbapi_rc_sys();
 	size_t retidx = retlen - 1, bidx = blen - 1;
 
@@ -86,6 +87,38 @@ xbapi_rc_t xbapi_escape( uint8_t **buf ) {
 		if( bidx != 0 ) assert(retidx != 0);
 	} while( retidx--, bidx --> 0 );
 
+	*buf = ret;
+	return xbapi_rc(XBAPI_ERR_NOERR);
+}
+
+// buf must be talloc'ed
+xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
+	assert(buf != NULL);
+	assert(*buf != NULL);
+	uint8_t *b = *buf;
+	if( b[0] != 0x7E ) return xbapi_rc(XBAPI_ERR_BADPACKET);
+#ifndef NDEBUG
+	size_t blen = talloc_array_length(b);
+	assert(blen >= 5);
+#endif
+	// TODO: This is endian specific
+	uint16_t dlen = (b[1] << 8) | b[2];
+	uint8_t checksum = b[blen - 1], runningChecksum = 0;
+	for( size_t i = 3; i < blen - 1; i++ ) {
+		uint16_t sum = runningChecksum + b[i];
+		runningChecksum = (uint8_t) sum;
+	}
+	// TODO: Underflow possible?
+	runningChecksum = 0xFF - runningChecksum;
+	if( runningChecksum != checksum ) return xbapi_rc(XBAPI_ERR_BADPACKET);
+	memmove(b, b + 3, dlen);
+	uint8_t *ret = talloc_realloc_size(NULL, b, dlen);
+	if( ret == NULL ) {
+		int eno = errno;
+		// Shit. TODO: Undo our destructive work to b.
+		errno = eno;
+		return xbapi_rc_sys();
+	}
 	*buf = ret;
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }

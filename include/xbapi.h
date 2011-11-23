@@ -10,7 +10,8 @@ extern "C" {
 typedef enum {
 	XBAPI_ERR_NOERR,
 	XBAPI_ERR_SYS,
-	XBAPI_ERR_OVERFLOW
+	XBAPI_ERR_OVERFLOW,
+	XBAPI_ERR_BADPACKET
 } xbapi_err_e;
 
 typedef struct {
