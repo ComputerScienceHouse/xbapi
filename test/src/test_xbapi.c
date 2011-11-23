@@ -53,9 +53,27 @@ static void test_xbapi_unwrap() {
 	TALLOC_FREE(buf);
 }
 
+static void test_xbapi_wrap() {
+	uint8_t *buf;
+	if( (buf = talloc_array(NULL, uint8_t, 5)) == NULL ) xbapi_die("talloc_array", xbapi_rc_sys());
+	buf[0] = 0x08;
+	buf[1] = 0x01;
+	buf[2] = 0x4E;
+	buf[3] = 0x4A;
+	buf[4] = 0xFF;
+	xbapi_rc_t rc;
+	if( xbapi_errno(rc = xbapi_wrap(&buf)) != XBAPI_ERR_NOERR ) xbapi_die("xbapi_unwrap", rc);
+	uint8_t expected[] = { 0x7E, 0x00, 0x05, 0x08, 0x01, 0x4E, 0x4A, 0xFF, 0x5F };
+	size_t buflen = talloc_array_length(buf);
+	CU_ASSERT_EQUAL(buflen, 9);
+	CU_ASSERT_NSTRING_EQUAL(buf, expected, buflen);
+	TALLOC_FREE(buf);
+}
+
 void xbapi_add_suite() {
 	CU_pSuite suite;
 	if( (suite = CU_add_suite("xbapi", NULL, NULL)) == NULL ) CU_die("CU_add_suite");
 	if( CU_ADD_TEST(suite, test_xbapi_escape) == NULL ) CU_die("CU_ADD_TEST");
 	if( CU_ADD_TEST(suite, test_xbapi_unwrap) == NULL ) CU_die("CU_ADD_TEST");
+	if( CU_ADD_TEST(suite, test_xbapi_wrap) == NULL ) CU_die("CU_ADD_TEST");
 }
