@@ -138,6 +138,7 @@ typedef struct {
 
 typedef struct {
 	int fd;
+	uint8_t frame_id;
 } xbapi_conn_t;
 
 export xbapi_err_e xbapi_errno( xbapi_rc_t err );

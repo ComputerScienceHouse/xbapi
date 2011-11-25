@@ -212,14 +212,239 @@ xbapi_rc_t xbapi_wrap( uint8_t **buf ) {
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
 
+const char *at_cmd_str(xbapi_at_e command) {
+	static const char AT_COMMAND_STRINGS[][2] = {
+		[XBAPI_AT_DH] = "DH",
+		[XBAPI_AT_DL] = "DL",
+		[XBAPI_AT_MY] = "MY",
+		[XBAPI_AT_MP] = "MP",
+		[XBAPI_AT_NC] = "NC",
+		[XBAPI_AT_SH] = "SH",
+		[XBAPI_AT_SL] = "SL",
+		[XBAPI_AT_NI] = "HI",
+		[XBAPI_AT_SE] = "SE",
+		[XBAPI_AT_DE] = "DE",
+		[XBAPI_AT_CI] = "CI",
+		[XBAPI_AT_NP] = "NP",
+		[XBAPI_AT_DD] = "DD",
+		[XBAPI_AT_CH] = "CH",
+		[XBAPI_AT_ID] = "ID",
+		[XBAPI_AT_OP] = "OP",
+		[XBAPI_AT_NH] = "NH",
+		[XBAPI_AT_BH] = "BH",
+		[XBAPI_AT_OI] = "OI",
+		[XBAPI_AT_NT] = "NT",
+		[XBAPI_AT_NO] = "NO",
+		[XBAPI_AT_SC] = "SC",
+		[XBAPI_AT_SD] = "SD",
+		[XBAPI_AT_ZS] = "ZS",
+		[XBAPI_AT_NJ] = "NJ",
+		[XBAPI_AT_JV] = "JV",
+		[XBAPI_AT_NW] = "NW",
+		[XBAPI_AT_JN] = "JN",
+		[XBAPI_AT_AR] = "AR",
+		[XBAPI_AT_EE] = "EE",
+		[XBAPI_AT_EO] = "EO",
+		[XBAPI_AT_NK] = "NK",
+		[XBAPI_AT_KY] = "KY",
+		[XBAPI_AT_PL] = "PL",
+		[XBAPI_AT_PM] = "PM",
+		[XBAPI_AT_DB] = "DB",
+		[XBAPI_AT_PP] = "PP",
+		[XBAPI_AT_AP] = "AP",
+		[XBAPI_AT_AO] = "AO",
+		[XBAPI_AT_BD] = "BD",
+		[XBAPI_AT_NB] = "NB",
+		[XBAPI_AT_SB] = "SB",
+		[XBAPI_AT_RO] = "RO",
+		[XBAPI_AT_D7] = "D7",
+		[XBAPI_AT_D6] = "D6",
+		[XBAPI_AT_IR] = "IR",
+		[XBAPI_AT_IC] = "IC",
+		[XBAPI_AT_P0] = "P0",
+		[XBAPI_AT_P1] = "P1",
+		[XBAPI_AT_P2] = "P2",
+		[XBAPI_AT_P3] = "P3",
+		[XBAPI_AT_D0] = "D0",
+		[XBAPI_AT_D1] = "D1",
+		[XBAPI_AT_D2] = "D2",
+		[XBAPI_AT_D3] = "D3",
+		[XBAPI_AT_D4] = "D4",
+		[XBAPI_AT_D5] = "D5",
+		[XBAPI_AT_D8] = "D8",
+		[XBAPI_AT_LT] = "LT",
+		[XBAPI_AT_PR] = "PR",
+		[XBAPI_AT_RP] = "RP",
+		[XBAPI_AT_SV] = "SV",
+		[XBAPI_AT_VS] = "VS",
+		[XBAPI_AT_TP] = "TP",
+		[XBAPI_AT_VR] = "VR",
+		[XBAPI_AT_HV] = "HV",
+		[XBAPI_AT_AI] = "AI",
+		[XBAPI_AT_CT] = "CT",
+		[XBAPI_AT_CN] = "CN",
+		[XBAPI_AT_GT] = "GT",
+		[XBAPI_AT_CC] = "CC",
+		[XBAPI_AT_SM] = "CM",
+		[XBAPI_AT_SN] = "SN",
+		[XBAPI_AT_SP] = "SP",
+		[XBAPI_AT_ST] = "ST",
+		[XBAPI_AT_SO] = "SO",
+		[XBAPI_AT_WH] = "WH",
+		[XBAPI_AT_PO] = "PO",
+		[XBAPI_AT_AC] = "AC",
+		[XBAPI_AT_WR] = "WR",
+		[XBAPI_AT_RE] = "RE",
+		[XBAPI_AT_FR] = "FR",
+		[XBAPI_AT_NR] = "NR",
+		[XBAPI_AT_SI] = "SI",
+		[XBAPI_AT_CB] = "CB",
+		[XBAPI_AT_ND] = "ND",
+		[XBAPI_AT_DN] = "DN",
+		[XBAPI_AT_IS] = "IS",
+		[XBAPI_AT_1S] = "1S"
+	};
 
-xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e *command, xbapi_at_arg_u *args) {
-	(void)conn;
+	return AT_COMMAND_STRINGS[command];
+}
+
+
+xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e command, xbapi_at_arg_u *args) {
+	assert(conn != NULL);
+	assert(op != NULL);
+
+	const char *cmdstr = at_cmd_str(command);
+	static const int PACKET_HEAD_LEN = 4;
+	uint8_t packet_head[] = { XBAPI_FRAME_AT, (++conn->frame_id), cmdstr[0], cmdstr[1] };
+	uint8_t *packet = NULL;
+
+	// Set up the operation structure (frame id, clear result)
 	(void)op;
-	(void)command;
-	(void)args;
-	xbapi_rc_t rc = {.code = XBAPI_ERR_NOERR};
-	return rc;
+
+	switch (command) {
+		case XBAPI_AT_DH:
+		case XBAPI_AT_DL:
+		case XBAPI_AT_SH:
+		case XBAPI_AT_SL:
+		case XBAPI_AT_DD:
+		case XBAPI_AT_ID:
+		case XBAPI_AT_OP:
+			assert(args != NULL);
+			packet = talloc_array_size(NULL, 1, 4 + PACKET_HEAD_LEN);
+			break;
+
+		case XBAPI_AT_MY:
+		case XBAPI_AT_MP:
+		case XBAPI_AT_CI:
+		case XBAPI_AT_NP:
+		case XBAPI_AT_OI:
+		case XBAPI_AT_SC:
+		case XBAPI_AT_NW:
+		case XBAPI_AT_IR:
+		case XBAPI_AT_IC:
+		case XBAPI_AT_PR:
+		case XBAPI_AT_SV:
+		case XBAPI_AT_VS:
+		case XBAPI_AT_TP:
+		case XBAPI_AT_VR:
+		case XBAPI_AT_HV:
+		case XBAPI_AT_CT:
+		case XBAPI_AT_GT:
+		case XBAPI_AT_SN:
+		case XBAPI_AT_SP:
+		case XBAPI_AT_ST:
+		case XBAPI_AT_WH:
+		case XBAPI_AT_PO:
+			assert(args != NULL);
+			packet = talloc_array_size(NULL, 1, 2 + PACKET_HEAD_LEN);
+			break;
+
+		case XBAPI_AT_CN:
+		case XBAPI_AT_AC:
+		case XBAPI_AT_WR:
+		case XBAPI_AT_RE:
+		case XBAPI_AT_FR:
+		case XBAPI_AT_SI:
+		case XBAPI_AT_IS:
+		case XBAPI_AT_1S:
+		case XBAPI_AT_CB:
+			assert(args == NULL);
+			break;
+
+		case XBAPI_AT_NI:
+		case XBAPI_AT_ND:
+		case XBAPI_AT_DN:
+			// variable length (this is going to need work)
+			assert(args != NULL);
+			packet = talloc_array_size(NULL, 1, 20 + PACKET_HEAD_LEN);
+			break;
+
+		case XBAPI_AT_NC:
+		case XBAPI_AT_SE:
+		case XBAPI_AT_DE:
+		case XBAPI_AT_CH:
+		case XBAPI_AT_NH:
+		case XBAPI_AT_BH:
+		case XBAPI_AT_NT:
+		case XBAPI_AT_NO:
+		case XBAPI_AT_SD:
+		case XBAPI_AT_ZS:
+		case XBAPI_AT_NJ:
+		case XBAPI_AT_JV:
+		case XBAPI_AT_JN:
+		case XBAPI_AT_AR:
+		case XBAPI_AT_EE:
+		case XBAPI_AT_EO:
+		case XBAPI_AT_PL:
+		case XBAPI_AT_PM:
+		case XBAPI_AT_DB:
+		case XBAPI_AT_PP:
+		case XBAPI_AT_AP:
+		case XBAPI_AT_AO:
+		case XBAPI_AT_BD:
+		case XBAPI_AT_NB:
+		case XBAPI_AT_SB:
+		case XBAPI_AT_RO:
+		case XBAPI_AT_D7:
+		case XBAPI_AT_D6:
+		case XBAPI_AT_P0:
+		case XBAPI_AT_P1:
+		case XBAPI_AT_P2:
+		case XBAPI_AT_P3:
+		case XBAPI_AT_D0:
+		case XBAPI_AT_D1:
+		case XBAPI_AT_D2:
+		case XBAPI_AT_D3:
+		case XBAPI_AT_D4:
+		case XBAPI_AT_D5:
+		case XBAPI_AT_D8:
+		case XBAPI_AT_LT:
+		case XBAPI_AT_RP:
+		case XBAPI_AT_AI:
+		case XBAPI_AT_CC:
+		case XBAPI_AT_SM:
+		case XBAPI_AT_SO:
+		case XBAPI_AT_NR:
+			assert(args != NULL);
+			packet = talloc_array_size(NULL, 1, 1 + PACKET_HEAD_LEN);
+			break;
+
+		case XBAPI_AT_NK:
+		case XBAPI_AT_KY:
+			assert(args != NULL);
+			packet = talloc_array_size(NULL, 1, 16 + PACKET_HEAD_LEN);
+			break;
+	}
+
+	if (packet == NULL && args != NULL) return xbapi_rc_sys();
+	memcpy(packet, packet_head, PACKET_HEAD_LEN);
+	// Copy the arg into packet[4:-1]
+
+	xbapi_wrap(&packet);
+
+	// Send the packet
+
+	return xbapi_rc(XBAPI_ERR_NOERR);
 }
 
 xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e *command, xbapi_at_arg_u *args) {
