@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <arpa/inet.h>
+#include <unistd.h>
 
 #include <talloc.h>
 #include <CUnit/CUnit.h>
@@ -319,8 +320,10 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e com
 	uint8_t *packet = NULL;
 
 	// Set up the operation structure (frame id, clear result)
-	(void)op;
+	op->frame_id = conn->frame_id;
+	op->status = XBAPI_OP_STATUS_PENDING;
 
+	// Allocate space for the packet and copy the args into it
 	switch (command) {
 		case XBAPI_AT_DH:
 		case XBAPI_AT_DL:
@@ -330,7 +333,10 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e com
 		case XBAPI_AT_ID:
 		case XBAPI_AT_OP:
 			assert(args != NULL);
-			packet = talloc_array_size(NULL, 1, 4 + PACKET_HEAD_LEN);
+			packet = talloc_array_size(NULL, 1, sizeof(args->u32) + PACKET_HEAD_LEN);
+			if (packet == NULL && args != NULL)
+				return xbapi_rc_sys();
+			*((uint32_t *) (packet + PACKET_HEAD_LEN)) = args->u32;
 			break;
 
 		case XBAPI_AT_MY:
@@ -356,7 +362,10 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e com
 		case XBAPI_AT_WH:
 		case XBAPI_AT_PO:
 			assert(args != NULL);
-			packet = talloc_array_size(NULL, 1, 2 + PACKET_HEAD_LEN);
+			packet = talloc_array_size(NULL, 1, sizeof(args->u16) + PACKET_HEAD_LEN);
+			if (packet == NULL && args != NULL)
+				return xbapi_rc_sys();
+			*((uint16_t *) (packet + PACKET_HEAD_LEN)) = args->u16;
 			break;
 
 		case XBAPI_AT_CN:
@@ -369,14 +378,20 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e com
 		case XBAPI_AT_1S:
 		case XBAPI_AT_CB:
 			assert(args == NULL);
+			packet = talloc_array_size(NULL, 1, PACKET_HEAD_LEN);
+			if (packet == NULL && args != NULL)
+				return xbapi_rc_sys();
 			break;
 
 		case XBAPI_AT_NI:
 		case XBAPI_AT_ND:
 		case XBAPI_AT_DN:
-			// variable length (this is going to need work)
 			assert(args != NULL);
-			packet = talloc_array_size(NULL, 1, 20 + PACKET_HEAD_LEN);
+			int textlen = talloc_array_length(args->text);
+			packet = talloc_array_size(NULL, 1, textlen + PACKET_HEAD_LEN);
+			if (packet == NULL && args != NULL)
+				return xbapi_rc_sys();
+			memcpy(packet + PACKET_HEAD_LEN, args->text, textlen);
 			break;
 
 		case XBAPI_AT_NC:
@@ -426,23 +441,34 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e com
 		case XBAPI_AT_SO:
 		case XBAPI_AT_NR:
 			assert(args != NULL);
-			packet = talloc_array_size(NULL, 1, 1 + PACKET_HEAD_LEN);
+			packet = talloc_array_size(NULL, 1, sizeof(args->u8) + PACKET_HEAD_LEN);
+			if (packet == NULL && args != NULL)
+				return xbapi_rc_sys();
+			packet[PACKET_HEAD_LEN] = args->u8;
 			break;
 
 		case XBAPI_AT_NK:
 		case XBAPI_AT_KY:
 			assert(args != NULL);
-			packet = talloc_array_size(NULL, 1, 16 + PACKET_HEAD_LEN);
+			packet = talloc_array_size(NULL, 1, sizeof(args->u128) + PACKET_HEAD_LEN);
+			if (packet == NULL && args != NULL)
+				return xbapi_rc_sys();
+			memcpy(packet + PACKET_HEAD_LEN, args->u128, sizeof(args->u128));
 			break;
 	}
 
-	if (packet == NULL && args != NULL) return xbapi_rc_sys();
+	// Copy the packet head into the packet and wrap it
 	memcpy(packet, packet_head, PACKET_HEAD_LEN);
-	// Copy the arg into packet[4:-1]
-
 	xbapi_wrap(&packet);
 
 	// Send the packet
+	errno = 0;
+	int packet_len = talloc_array_length(packet);
+	if (write(conn->fd, packet, packet_len) != packet_len) {
+		if (errno)
+			return xbapi_rc_sys();
+		return xbapi_rc(XBAPI_ERR_INCWRITE);
+	}
 
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }

@@ -12,7 +12,8 @@ typedef enum {
 	XBAPI_ERR_SYS,
 	XBAPI_ERR_OVERFLOW,
 	XBAPI_ERR_BADPACKET,
-	XBAPI_ERR_BUFBIG
+	XBAPI_ERR_BUFBIG,
+	XBAPI_ERR_INCWRITE
 } xbapi_err_e;
 
 typedef enum {
@@ -122,7 +123,7 @@ typedef union {
 	uint32_t u32;
 	uint16_t u16;
 	uint8_t u8;
-	char text[20];
+	uint8_t text[20];
 } xbapi_at_arg_u;
 
 typedef struct {
@@ -132,8 +133,15 @@ typedef struct {
 	};
 } xbapi_rc_t;
 
-typedef struct {
+typedef enum {
+	XBAPI_OP_STATUS_PENDING,
+	XBAPI_OP_STATUS_SUCCESS,
+	XBAPI_OP_STATUS_FAILURE
+} xbapi_op_status_e;
 
+typedef struct {
+	uint8_t frame_id;
+	xbapi_op_status_e status;
 } xbapi_op_t;
 
 typedef struct {
