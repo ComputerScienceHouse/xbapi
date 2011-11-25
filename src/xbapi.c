@@ -211,3 +211,22 @@ xbapi_rc_t xbapi_wrap( uint8_t **buf ) {
 
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
+
+
+xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e *command, xbapi_at_arg_u *args) {
+	(void)conn;
+	(void)op;
+	(void)command;
+	(void)args;
+	xbapi_rc_t rc = {.code = XBAPI_ERR_NOERR};
+	return rc;
+}
+
+xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e *command, xbapi_at_arg_u *args) {
+	(void)conn;
+	(void)op;
+	(void)command;
+	(void)args;
+	xbapi_rc_t rc = {.code = XBAPI_ERR_NOERR};
+	return rc;
+}
