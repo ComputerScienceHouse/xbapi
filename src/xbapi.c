@@ -314,9 +314,12 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e com
 	assert(conn != NULL);
 	assert(op != NULL);
 
+	conn->frame_id++;
+	if (conn->frame_id == 0) conn->frame_id++;
+
 	const char *cmdstr = at_cmd_str(command);
 	static const int PACKET_HEAD_LEN = 4;
-	uint8_t packet_head[] = { XBAPI_FRAME_AT, (++conn->frame_id), cmdstr[0], cmdstr[1] };
+	uint8_t packet_head[] = { XBAPI_FRAME_AT, conn->frame_id, cmdstr[0], cmdstr[1] };
 	uint8_t *packet = NULL;
 
 	// Set up the operation structure (frame id, clear result)
