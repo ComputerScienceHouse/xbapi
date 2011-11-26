@@ -123,7 +123,7 @@ typedef union {
 	uint32_t u32;
 	uint16_t u16;
 	uint8_t u8;
-	uint8_t text[20];
+	uint8_t *text;
 } xbapi_at_arg_u;
 
 typedef struct {

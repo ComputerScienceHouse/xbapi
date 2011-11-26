@@ -143,6 +143,87 @@ static void test_xbapi_wrap2() {
 	TALLOC_FREE(buf);
 }
 
+static void test_xbapi_set_at_param1() {
+	int fds[2];
+	if (pipe(fds) == -1) xbapi_die("pipe", xbapi_rc_sys());
+
+	xbapi_conn_t conn = { .fd = fds[1], .frame_id = 0x05 };
+	xbapi_op_t op;
+	xbapi_at_arg_u args = { .u8 = 0xFF };
+
+	xbapi_rc_t rc;
+	if( xbapi_errno(rc = xbapi_set_at_param(&conn, &op, XBAPI_AT_NJ, &args)) != XBAPI_ERR_NOERR )
+		xbapi_die("xbapi_set_at_param", rc);
+
+	uint8_t buf[10];
+	int buflen = read(fds[0], &buf, 10);
+	uint8_t expected[] = { 0x7E, 0x00, 0x05, 0x08, 0x06, 0x4E, 0x4A, 0xFF, 0x5A };
+
+	CU_ASSERT_EQUAL(buflen, 9);
+	for( int i = 0; i < buflen; i++ ) CU_ASSERT_EQUAL(buf[i], expected[i]);
+}
+
+static void test_xbapi_set_at_param2() {
+	int fds[2];
+	if (pipe(fds) == -1) xbapi_die("pipe", xbapi_rc_sys());
+
+	xbapi_conn_t conn = { .fd = fds[1], .frame_id = 0x38 };
+	xbapi_op_t op;
+	xbapi_at_arg_u args = { .text = talloc_array(NULL, uint8_t, 0) };
+
+	xbapi_rc_t rc;
+	if( xbapi_errno(rc = xbapi_set_at_param(&conn, &op, XBAPI_AT_ND, &args)) != XBAPI_ERR_NOERR )
+		xbapi_die("xbapi_set_at_param", rc);
+
+	uint8_t buf[9];
+	int buflen = read(fds[0], &buf, 9);
+	uint8_t expected[] = { 0x7E, 0x00, 0x04, 0x08, 0x39, 0x4E, 0x44, 0x2C };
+
+	CU_ASSERT_EQUAL(buflen, 8);
+	for( int i = 0; i < buflen; i++ ) CU_ASSERT_EQUAL(buf[i], expected[i]);
+}
+
+static void test_xbapi_set_at_param3() {
+	int fds[2];
+	if (pipe(fds) == -1) xbapi_die("pipe", xbapi_rc_sys());
+
+	xbapi_conn_t conn = { .fd = fds[1], .frame_id = 0x1D };
+	xbapi_op_t op;
+	uint8_t *te = talloc_array(NULL, uint8_t, 3);
+	memcpy(te, "ABC", 3);
+	xbapi_at_arg_u args = { .text = te };
+
+	xbapi_rc_t rc;
+	if( xbapi_errno(rc = xbapi_set_at_param(&conn, &op, XBAPI_AT_ND, &args)) != XBAPI_ERR_NOERR )
+		xbapi_die("xbapi_set_at_param", rc);
+
+	uint8_t buf[12];
+	int buflen = read(fds[0], &buf, 12);
+	uint8_t expected[] = { 0x7E, 0x00, 0x07, 0x08, 0x1E, 0x4E, 0x44, 0x41, 0x42, 0x43, 0x81 };
+
+	CU_ASSERT_EQUAL(buflen, 11);
+	for( int i = 0; i < buflen; i++ ) CU_ASSERT_EQUAL(buf[i], expected[i]);
+}
+
+static void test_xbapi_set_at_param4() {
+	int fds[2];
+	if (pipe(fds) == -1) xbapi_die("pipe", xbapi_rc_sys());
+
+	xbapi_conn_t conn = { .fd = fds[1], .frame_id = 0xFF };
+	xbapi_op_t op;
+
+	xbapi_rc_t rc;
+	if( xbapi_errno(rc = xbapi_set_at_param(&conn, &op, XBAPI_AT_IS, NULL)) != XBAPI_ERR_NOERR )
+		xbapi_die("xbapi_set_at_param", rc);
+
+	uint8_t buf[9];
+	int buflen = read(fds[0], &buf, 9);
+	uint8_t expected[] = { 0x7E, 0x00, 0x04, 0x08, 0x01, 0x49, 0x53, 0x5A };
+
+	CU_ASSERT_EQUAL(buflen, 8);
+	for( int i = 0; i < buflen; i++ ) CU_ASSERT_EQUAL(buf[i], expected[i]);
+}
+
 void xbapi_add_suite() {
 	CU_pSuite suite;
 	if( (suite = CU_add_suite("xbapi", NULL, NULL)) == NULL ) CU_die("CU_add_suite");
@@ -152,4 +233,9 @@ void xbapi_add_suite() {
 	if( CU_ADD_TEST(suite, test_xbapi_wrap2) == NULL ) CU_die("CU_ADD_TEST");
 	if( CU_ADD_TEST(suite, test_xbapi_unwrap1) == NULL ) CU_die("CU_ADD_TEST");
 	if( CU_ADD_TEST(suite, test_xbapi_unwrap2) == NULL ) CU_die("CU_ADD_TEST");
+	if( CU_ADD_TEST(suite, test_xbapi_set_at_param1) == NULL ) CU_die("CU_ADD_TEST");
+	if( CU_ADD_TEST(suite, test_xbapi_set_at_param2) == NULL ) CU_die("CU_ADD_TEST");
+	if( CU_ADD_TEST(suite, test_xbapi_set_at_param3) == NULL ) CU_die("CU_ADD_TEST");
+	if( CU_ADD_TEST(suite, test_xbapi_set_at_param4) == NULL ) CU_die("CU_ADD_TEST");
 }
+
