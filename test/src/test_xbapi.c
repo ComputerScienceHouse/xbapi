@@ -224,6 +224,44 @@ static void test_xbapi_set_at_param4() {
 	for( int i = 0; i < buflen; i++ ) CU_ASSERT_EQUAL(buf[i], expected[i]);
 }
 
+static void test_xbapi_query_at_param1() {
+	int fds[2];
+	if (pipe(fds) == -1) xbapi_die("pipe", xbapi_rc_sys());
+
+	xbapi_conn_t conn = { .fd = fds[1], .frame_id = 0x18 };
+	xbapi_op_t op;
+
+	xbapi_rc_t rc;
+	if( xbapi_errno(rc = xbapi_query_at_param(&conn, &op, XBAPI_AT_BH)) != XBAPI_ERR_NOERR )
+		xbapi_die("xbapi_query_at_param", rc);
+
+	uint8_t buf[9];
+	int buflen = read(fds[0], &buf, 8);
+	uint8_t expected[] = { 0x7E, 0x00, 0x04, 0x08, 0x19, 0x42, 0x48, 0x54 };
+
+	CU_ASSERT_EQUAL(buflen, 8);
+	for( int i = 0; i < buflen; i++ ) CU_ASSERT_EQUAL(buf[i], expected[i]);
+}
+
+static void test_xbapi_query_at_param2() {
+	int fds[2];
+	if (pipe(fds) == -1) xbapi_die("pipe", xbapi_rc_sys());
+
+	xbapi_conn_t conn = { .fd = fds[1], .frame_id = 0xD6 };
+	xbapi_op_t op;
+
+	xbapi_rc_t rc;
+	if( xbapi_errno(rc = xbapi_query_at_param(&conn, &op, XBAPI_AT_EE)) != XBAPI_ERR_NOERR )
+		xbapi_die("xbapi_query_at_param", rc);
+
+	uint8_t buf[9];
+	int buflen = read(fds[0], &buf, 8);
+	uint8_t expected[] = { 0x7E, 0x00, 0x04, 0x08, 0xD7, 0x45, 0x45, 0x96 };
+
+	CU_ASSERT_EQUAL(buflen, 8);
+	for( int i = 0; i < buflen; i++ ) CU_ASSERT_EQUAL(buf[i], expected[i]);
+}
+
 void xbapi_add_suite() {
 	CU_pSuite suite;
 	if( (suite = CU_add_suite("xbapi", NULL, NULL)) == NULL ) CU_die("CU_add_suite");
@@ -237,5 +275,7 @@ void xbapi_add_suite() {
 	if( CU_ADD_TEST(suite, test_xbapi_set_at_param2) == NULL ) CU_die("CU_ADD_TEST");
 	if( CU_ADD_TEST(suite, test_xbapi_set_at_param3) == NULL ) CU_die("CU_ADD_TEST");
 	if( CU_ADD_TEST(suite, test_xbapi_set_at_param4) == NULL ) CU_die("CU_ADD_TEST");
+	if( CU_ADD_TEST(suite, test_xbapi_query_at_param1) == NULL ) CU_die("CU_ADD_TEST");
+	if( CU_ADD_TEST(suite, test_xbapi_query_at_param2) == NULL ) CU_die("CU_ADD_TEST");
 }
 

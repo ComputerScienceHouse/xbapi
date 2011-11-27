@@ -309,6 +309,17 @@ const char *at_cmd_str(xbapi_at_e command) {
 	return AT_COMMAND_STRINGS[command];
 }
 
+xbapi_rc_t xbapi_send(xbapi_conn_t *conn, uint8_t *packet) {
+	errno = 0;
+	int packet_len = talloc_array_length(packet);
+	if (write(conn->fd, packet, packet_len) != packet_len) {
+		if (errno)
+			return xbapi_rc_sys();
+		return xbapi_rc(XBAPI_ERR_INCWRITE);
+	}
+	return xbapi_rc(XBAPI_ERR_NOERR);
+}
+
 
 xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e command, xbapi_at_arg_u *args) {
 	assert(conn != NULL);
@@ -464,23 +475,26 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e com
 	memcpy(packet, packet_head, PACKET_HEAD_LEN);
 	xbapi_wrap(&packet);
 
-	// Send the packet
-	errno = 0;
-	int packet_len = talloc_array_length(packet);
-	if (write(conn->fd, packet, packet_len) != packet_len) {
-		if (errno)
-			return xbapi_rc_sys();
-		return xbapi_rc(XBAPI_ERR_INCWRITE);
-	}
-
-	return xbapi_rc(XBAPI_ERR_NOERR);
+	return xbapi_send(conn, packet);
 }
 
-xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e *command, xbapi_at_arg_u *args) {
-	(void)conn;
-	(void)op;
-	(void)command;
-	(void)args;
-	xbapi_rc_t rc = {.code = XBAPI_ERR_NOERR};
-	return rc;
+xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e command) {
+	assert(conn != NULL);
+	assert(op != NULL);
+
+	conn->frame_id++;
+	if (conn->frame_id == 0) conn->frame_id++;
+
+	const char *cmdstr = at_cmd_str(command);
+	static const int PACKET_LEN = 4;
+	uint8_t packet_data[] = { XBAPI_FRAME_AT, conn->frame_id, cmdstr[0], cmdstr[1] };
+	uint8_t *packet = talloc_array_size(NULL, 1, PACKET_LEN);
+	memcpy(packet, packet_data, PACKET_LEN);
+	xbapi_wrap(&packet);
+
+	// Set up the operation structure (frame id, clear result)
+	op->frame_id = conn->frame_id;
+	op->status = XBAPI_OP_STATUS_PENDING;
+
+	return xbapi_send(conn, packet);
 }
