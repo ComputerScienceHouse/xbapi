@@ -144,11 +144,6 @@ typedef struct {
 	xbapi_op_status_e status;
 } xbapi_op_t;
 
-typedef struct {
-	int fd;
-	uint8_t frame_id;
-} xbapi_conn_t;
-
 export xbapi_err_e xbapi_errno( xbapi_rc_t err );
 export int xbapi_sys_errno( xbapi_rc_t err );
 

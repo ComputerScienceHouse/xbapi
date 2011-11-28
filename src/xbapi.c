@@ -330,7 +330,7 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e com
 
 	const char *cmdstr = at_cmd_str(command);
 	static const int PACKET_HEAD_LEN = 4;
-	uint8_t packet_head[] = { XBAPI_FRAME_AT, conn->frame_id, cmdstr[0], cmdstr[1] };
+	uint8_t packet_head[] = { XBAPI_FRAME_AT_CMD, conn->frame_id, cmdstr[0], cmdstr[1] };
 	uint8_t *packet = NULL;
 
 	// Set up the operation structure (frame id, clear result)
@@ -401,7 +401,7 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e com
 		case XBAPI_AT_ND:
 		case XBAPI_AT_DN:
 			assert(args != NULL);
-			int textlen = talloc_array_length(args->text);
+			size_t textlen = talloc_array_length(args->text);
 			packet = talloc_array_size(NULL, 1, textlen + PACKET_HEAD_LEN);
 			if (packet == NULL && args != NULL)
 				return xbapi_rc_sys();
@@ -487,7 +487,7 @@ xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e c
 
 	const char *cmdstr = at_cmd_str(command);
 	static const int PACKET_LEN = 4;
-	uint8_t packet_data[] = { XBAPI_FRAME_AT, conn->frame_id, cmdstr[0], cmdstr[1] };
+	uint8_t packet_data[] = { XBAPI_FRAME_AT_CMD, conn->frame_id, cmdstr[0], cmdstr[1] };
 	uint8_t *packet = talloc_array_size(NULL, 1, PACKET_LEN);
 	memcpy(packet, packet_data, PACKET_LEN);
 	xbapi_wrap(&packet);
@@ -498,3 +498,77 @@ xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e c
 
 	return xbapi_send(conn, packet);
 }
+
+xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
+	(void)ops;
+	static const int BUF_SIZE = 100;
+	int buf_len = 0;
+	uint8_t buf[BUF_SIZE];
+	int buffer_len = 0;
+
+	// Read the serial device and append the data to the existing buffer
+	do {
+		buf_len = read(conn->fd, buf, buf_len);
+		if (buf_len == -1) return xbapi_rc_sys();
+
+		buffer_len = talloc_array_length(conn->buffer);
+		conn->buffer = talloc_realloc_size(NULL, conn->buffer, buffer_len + buf_len);
+		if(conn->buffer == NULL) return xbapi_rc_sys();
+		memcpy(conn->buffer + buffer_len, buf, buf_len);
+	} while (buf_len == BUF_SIZE);
+
+
+	buffer_len = talloc_array_length(conn->buffer);
+	uint8_t *ptr = conn->buffer;
+
+	while (buffer_len > 0) {
+		// Toss out data until we find a frame start delimiter
+		while (*ptr != XBAPI_FRAME_DELIM && buffer_len > 0) {
+			ptr++;
+			buffer_len--;
+		}
+
+		// Check the length of the frame
+		int frm_len = -1;
+		if (buffer_len >= 2) {
+			frm_len = ntohs(*((uint16_t *)ptr));
+		}
+		// If we don't have the entire frame, save what we have in the connection buffer and return
+		if ((frm_len == -1) || (buffer_len < (frm_len + 4))) {
+			conn->buffer = talloc_realloc_size(NULL, conn->buffer, buffer_len);
+			if(conn->buffer == NULL) return xbapi_rc_sys();
+			memcpy(conn->buffer, ptr, buffer_len);
+			break;
+		}
+
+		// Unwrap the frame
+		uint8_t *packet = talloc_array_size(NULL, 1, frm_len);
+		memcpy(packet, ptr, frm_len);
+		xbapi_rc_t rc;
+		if (xbapi_errno(rc = xbapi_unwrap(&packet)) != XBAPI_ERR_NOERR) return rc;
+
+		// Handle the message
+		switch (packet[0]) {
+			case XBAPI_FRAME_AT_CMD_RES:
+			break;
+			//default:
+				//assert(false);
+		}
+
+		ptr += frm_len;
+		buffer_len -= frm_len;
+	}
+
+	return xbapi_rc(XBAPI_ERR_NOERR);
+}
+
+xbapi_conn_t xbapi_init_conn(int fd) {
+	xbapi_conn_t rt = { .fd = fd, .frame_id = 0, .buffer = talloc_array_size(NULL, 1, 0) };
+	return rt;
+}
+
+void xbapi_free_conn(xbapi_conn_t *conn) {
+	talloc_free(conn->buffer);
+	conn = NULL;
+}
+
