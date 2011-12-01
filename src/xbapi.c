@@ -311,6 +311,7 @@ const char *at_cmd_str(xbapi_at_e command) {
 
 xbapi_rc_t xbapi_send(xbapi_conn_t *conn, uint8_t *packet) {
 	errno = 0;
+	// Casting a size_t to an int
 	int packet_len = talloc_array_length(packet);
 	if (write(conn->fd, packet, packet_len) != packet_len) {
 		if (errno)
@@ -508,15 +509,15 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 
 	// Read the serial device and append the data to the existing buffer
 	do {
-		buf_len = read(conn->fd, buf, buf_len);
+		buf_len = read(conn->fd, buf, BUF_SIZE);
 		if (buf_len == -1) return xbapi_rc_sys();
 
+		// Casting a size_t to an int
 		buffer_len = talloc_array_length(conn->buffer);
 		conn->buffer = talloc_realloc_size(NULL, conn->buffer, buffer_len + buf_len);
 		if(conn->buffer == NULL) return xbapi_rc_sys();
 		memcpy(conn->buffer + buffer_len, buf, buf_len);
 	} while (buf_len == BUF_SIZE);
-
 
 	buffer_len = talloc_array_length(conn->buffer);
 	uint8_t *ptr = conn->buffer;
@@ -531,25 +532,53 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 		// Check the length of the frame
 		int frm_len = -1;
 		if (buffer_len >= 2) {
-			frm_len = ntohs(*((uint16_t *)ptr));
+			// Casting a uint16_t to an int
+			frm_len = ntohs(*((uint16_t *) (ptr + 1)));
 		}
 		// If we don't have the entire frame, save what we have in the connection buffer and return
 		if ((frm_len == -1) || (buffer_len < (frm_len + 4))) {
 			conn->buffer = talloc_realloc_size(NULL, conn->buffer, buffer_len);
-			if(conn->buffer == NULL) return xbapi_rc_sys();
+			if(conn->buffer == NULL && buffer_len > 0) return xbapi_rc_sys();
 			memcpy(conn->buffer, ptr, buffer_len);
 			break;
 		}
 
 		// Unwrap the frame
-		uint8_t *packet = talloc_array_size(NULL, 1, frm_len);
-		memcpy(packet, ptr, frm_len);
+		size_t packet_len = frm_len + 4;
+		uint8_t *packet = talloc_array_size(NULL, 1, packet_len);
+		if(conn->buffer == NULL) return xbapi_rc_sys();
+		memcpy(packet, ptr, packet_len);
 		xbapi_rc_t rc;
 		if (xbapi_errno(rc = xbapi_unwrap(&packet)) != XBAPI_ERR_NOERR) return rc;
+		packet_len = talloc_array_length(packet);
+
 
 		// Handle the message
 		switch (packet[0]) {
 			case XBAPI_FRAME_AT_CMD_RES:
+				assert(packet_len >= 5);
+				uint8_t frame_id = packet[1];
+				uint8_t status = packet[4];
+				assert(status <= XBAPI_OP_STATUS_TX_FAILURE);
+
+				uint8_t *data;
+				if (packet_len > 5) {
+					data = talloc_array(NULL, uint8_t, packet_len - 5);
+					if(conn->buffer == NULL) return xbapi_rc_sys();
+					memcpy(data, packet + 5, packet_len - 5);
+				} else {
+					data = NULL;
+				}
+
+				// Find the corresponding operation structure
+				size_t ops_len = talloc_array_length(ops);
+				for (size_t i = 0; i < ops_len; i++) {
+					if (ops[i].frame_id == frame_id) {
+						ops[i].status = status;
+						ops[i].data = data;
+						break;
+					}
+				}
 			break;
 			//default:
 				//assert(false);

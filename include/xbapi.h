@@ -134,14 +134,18 @@ typedef struct {
 } xbapi_rc_t;
 
 typedef enum {
-	XBAPI_OP_STATUS_PENDING,
-	XBAPI_OP_STATUS_SUCCESS,
-	XBAPI_OP_STATUS_FAILURE
+	XBAPI_OP_STATUS_OK,
+	XBAPI_OP_STATUS_ERROR,
+	XBAPI_OP_STATUS_INVALID_CMD,
+	XBAPI_OP_STATUS_INVALID_PARAM,
+	XBAPI_OP_STATUS_TX_FAILURE,
+	XBAPI_OP_STATUS_PENDING
 } xbapi_op_status_e;
 
 typedef struct {
 	uint8_t frame_id;
 	xbapi_op_status_e status;
+	uint8_t *data;
 } xbapi_op_t;
 
 export xbapi_err_e xbapi_errno( xbapi_rc_t err );
