@@ -507,6 +507,15 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 	uint8_t buf[BUF_SIZE];
 	int buffer_len = 0;
 
+	// If the last message ended in a trailing escape character (and we removed it),
+	// set the message to the escape character
+	if (conn->rollover_escape) {
+		buffer_len = talloc_array_length(conn->buffer);
+		conn->rollover_escape = false;
+		conn->buffer = talloc_realloc_size(NULL, conn->buffer, buffer_len + 1);
+		conn->buffer[buffer_len] = XBAPI_ESCAPE;
+	}
+
 	// Read the serial device and append the data to the existing buffer
 	do {
 		buf_len = read(conn->fd, buf, BUF_SIZE);
@@ -519,12 +528,29 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 		memcpy(conn->buffer + buffer_len, buf, buf_len);
 	} while (buf_len == BUF_SIZE);
 
+	// Figure out if there is an unmatched trailing escape character
+	buffer_len = talloc_array_length(conn->buffer);
+	bool has_trailing = false;
+	for (uint8_t *ptr = conn->buffer + buffer_len - 1; ptr >= conn->buffer; ptr--) {
+		if (*ptr == XBAPI_ESCAPE) {
+			has_trailing = !has_trailing;
+		} else
+			break;
+	}
+
+	// Remove the trailing escape and save it for the next batch
+	buffer_len = talloc_array_length(conn->buffer);
+	if (has_trailing) {
+		conn->rollover_escape = true;
+		conn->buffer = talloc_realloc_size(NULL, conn->buffer, buffer_len - 1);
+		buffer_len--;
+	}
+
+	// Unescape the buffered message
 	xbapi_rc_t rc = xbapi_unescape(&conn->buffer);
 	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 
-	buffer_len = talloc_array_length(conn->buffer);
 	uint8_t *ptr = conn->buffer;
-
 	while (buffer_len > 0) {
 		// Toss out data until we find a frame start delimiter
 		while (*ptr != XBAPI_FRAME_DELIM && buffer_len > 0) {
@@ -595,7 +621,12 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 }
 
 xbapi_conn_t xbapi_init_conn(int fd) {
-	xbapi_conn_t rt = { .fd = fd, .frame_id = 0, .buffer = talloc_array_size(NULL, 1, 0) };
+	xbapi_conn_t rt = {
+		.fd = fd,
+		.frame_id = 0,
+		.buffer = talloc_array_size(NULL, 1, 0),
+		.rollover_escape = false
+	};
 	return rt;
 }
 

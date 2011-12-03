@@ -37,6 +37,7 @@ typedef struct {
 	int fd;
 	uint8_t frame_id;
 	uint8_t *buffer;
+	bool rollover_escape;
 } xbapi_conn_t;
 
 
