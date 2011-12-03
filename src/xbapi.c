@@ -519,6 +519,9 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 		memcpy(conn->buffer + buffer_len, buf, buf_len);
 	} while (buf_len == BUF_SIZE);
 
+	xbapi_rc_t rc = xbapi_unescape(&conn->buffer);
+	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
+
 	buffer_len = talloc_array_length(conn->buffer);
 	uint8_t *ptr = conn->buffer;
 
@@ -546,7 +549,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 		// Unwrap the frame
 		size_t packet_len = frm_len + 4;
 		uint8_t *packet = talloc_array_size(NULL, 1, packet_len);
-		if(conn->buffer == NULL) return xbapi_rc_sys();
+		if(packet == NULL) return xbapi_rc_sys();
 		memcpy(packet, ptr, packet_len);
 		xbapi_rc_t rc;
 		if (xbapi_errno(rc = xbapi_unwrap(&packet)) != XBAPI_ERR_NOERR) return rc;
