@@ -375,6 +375,37 @@ static void test_xbapi_process_data4() {
 	xbapi_free_conn(&conn);
 }
 
+static void test_xbapi_process_data5() {
+	int fds[2];
+	if (pipe(fds) == -1) xbapi_die("pipe", xbapi_rc_sys());
+
+	uint8_t buf[] = { 0x7E, 0x00, 0x07, 0x88, 0x47, 0x42, 0x44, 0x00, 0x76, 0xA4, 0x90, 0x7E, 0x00, 0x05, 0x88, 0x01, 0x00, 0x00, 0x01, 0x75 };
+	write(fds[1], buf, 20);
+
+	xbapi_conn_t conn = xbapi_init_conn(fds[0]);
+	xbapi_rc_t rc;
+	xbapi_op_t *ops = talloc_array(NULL, xbapi_op_t, 3);
+	for (int i = 0; i < 3; i++) ops[i].status = XBAPI_OP_STATUS_PENDING;
+	ops[0].frame_id = 0x07;
+	ops[1].frame_id = 0x01;
+	ops[2].frame_id = 0x47;
+
+	if( xbapi_errno(rc = xbapi_process_data(&conn, ops)) != XBAPI_ERR_NOERR )
+		xbapi_die("xbapi_xbapi_process_data", rc);
+
+	CU_ASSERT_EQUAL(ops[0].status, XBAPI_OP_STATUS_PENDING);
+	CU_ASSERT_EQUAL(ops[1].status, XBAPI_OP_STATUS_ERROR);
+	CU_ASSERT_EQUAL(ops[2].status, XBAPI_OP_STATUS_OK);
+
+	size_t data_len = talloc_array_length(ops[2].data);
+	CU_ASSERT_EQUAL(data_len, 2);
+
+	uint8_t expected[] = { 0x76, 0xA4 };
+	for (size_t i = 0; i < data_len; i++) CU_ASSERT_EQUAL(ops[2].data[i], expected[i]);
+
+	xbapi_free_conn(&conn);
+}
+
 void xbapi_add_suite() {
 	CU_pSuite suite;
 	if( (suite = CU_add_suite("xbapi", NULL, NULL)) == NULL ) CU_die("CU_add_suite");
@@ -394,5 +425,6 @@ void xbapi_add_suite() {
 	if( CU_ADD_TEST(suite, test_xbapi_process_data2) == NULL ) CU_die("CU_ADD_TEST");
 	if( CU_ADD_TEST(suite, test_xbapi_process_data3) == NULL ) CU_die("CU_ADD_TEST");
 	if( CU_ADD_TEST(suite, test_xbapi_process_data4) == NULL ) CU_die("CU_ADD_TEST");
+	if( CU_ADD_TEST(suite, test_xbapi_process_data5) == NULL ) CU_die("CU_ADD_TEST");
 }
 
