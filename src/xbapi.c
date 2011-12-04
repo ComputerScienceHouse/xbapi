@@ -505,7 +505,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 	static const int BUF_SIZE = 100;
 	int buf_len = 0;
 	uint8_t buf[BUF_SIZE];
-	int buffer_len = 0;
+	size_t buffer_len = 0;
 
 	// If the last message ended in a trailing escape character (and we removed it),
 	// set the message to the escape character
@@ -549,6 +549,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 	// Unescape the buffered message
 	xbapi_rc_t rc = xbapi_unescape(&conn->buffer);
 	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
+	buffer_len = talloc_array_length(conn->buffer);
 
 	uint8_t *ptr = conn->buffer;
 	while (buffer_len > 0) {
@@ -565,7 +566,9 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 			frm_len = ntohs(*((uint16_t *) (ptr + 1)));
 		}
 		// If we don't have the entire frame, save what we have in the connection buffer and return
-		if ((frm_len == -1) || (buffer_len < (frm_len + 4))) {
+		size_t packet_len = frm_len + 4;
+		size_t orig_packet_len = packet_len;
+		if ((frm_len == -1) || (buffer_len < packet_len)) {
 			conn->buffer = talloc_realloc_size(NULL, conn->buffer, buffer_len);
 			if(conn->buffer == NULL && buffer_len > 0) return xbapi_rc_sys();
 			memcpy(conn->buffer, ptr, buffer_len);
@@ -573,14 +576,12 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 		}
 
 		// Unwrap the frame
-		size_t packet_len = frm_len + 4;
 		uint8_t *packet = talloc_array_size(NULL, 1, packet_len);
 		if(packet == NULL) return xbapi_rc_sys();
 		memcpy(packet, ptr, packet_len);
 		xbapi_rc_t rc;
 		if (xbapi_errno(rc = xbapi_unwrap(&packet)) != XBAPI_ERR_NOERR) return rc;
 		packet_len = talloc_array_length(packet);
-
 
 		// Handle the message
 		switch (packet[0]) {
@@ -613,8 +614,8 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 				//assert(false);
 		}
 
-		ptr += frm_len;
-		buffer_len -= frm_len;
+		ptr += orig_packet_len;
+		buffer_len -= orig_packet_len;
 	}
 
 	return xbapi_rc(XBAPI_ERR_NOERR);
