@@ -18,7 +18,7 @@ typedef enum {
 
 typedef enum {
 	// Addressing
-	XBAPI_AT_DH,
+	XBAPI_AT_DH = 0,
 	XBAPI_AT_DL,
 	XBAPI_AT_MY,
 	XBAPI_AT_MP,
@@ -134,19 +134,35 @@ typedef struct {
 } xbapi_rc_t;
 
 typedef enum {
-	XBAPI_OP_STATUS_OK,
-	XBAPI_OP_STATUS_ERROR,
-	XBAPI_OP_STATUS_INVALID_CMD,
-	XBAPI_OP_STATUS_INVALID_PARAM,
-	XBAPI_OP_STATUS_TX_FAILURE,
+	XBAPI_OP_STATUS_OK            = 0x00,
+	XBAPI_OP_STATUS_ERROR         = 0x01,
+	XBAPI_OP_STATUS_INVALID_CMD   = 0x02,
+	XBAPI_OP_STATUS_INVALID_PARAM = 0x03,
+	XBAPI_OP_STATUS_TX_FAILURE    = 0x04,
 	XBAPI_OP_STATUS_PENDING
 } xbapi_op_status_e;
 
-typedef struct {
-	uint8_t frame_id;
-	xbapi_op_status_e status;
-	uint8_t *data;
-} xbapi_op_t;
+typedef enum {
+	XBAPI_MODEM_HARDWARE_RESET               = 0x00,
+	XBAPI_MODEM_WDT_RESET                    = 0x01,
+	XBAPI_MODEM_JOINED_NETWORK               = 0x02,
+	XBAPI_MODEM_DISASSOCIATED                = 0x03,
+	XBAPI_MODEM_COORDINATOR_STARTED          = 0x06,
+	XBAPI_MODEM_SECURITY_KEY_UPDATED         = 0x07,
+	XBAPI_MODEM_OVERVOLTAGE                  = 0x0D,
+	XBAPI_MODEM_CONFIG_CHANGED_WHILE_JOINING = 0x11,
+	XBAPI_MODEM_STACK_ERROR                  = 0x6F,
+	XBAPI_MODEM_STATUS_UNKNOWN
+} xbapi_modem_status_e;
+
+struct _xbapi_op_set_t;
+typedef struct _xbapi_op_set_t xbapi_op_set_t;
+
+struct _xbapi_op_t;
+typedef struct _xbapi_op_t xbapi_op_t;
+
+struct _xbapi_conn_t;
+typedef struct _xbapi_conn_t xbapi_conn_t;
 
 export xbapi_err_e xbapi_errno( xbapi_rc_t err );
 export int xbapi_sys_errno( xbapi_rc_t err );
@@ -156,6 +172,14 @@ export xbapi_rc_t
 	xbapi_rc_sys();
 
 export const char *xbapi_strerror( xbapi_rc_t err );
+export xbapi_conn_t *xbapi_init_conn(int);
+export xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_at_arg_u *args, xbapi_op_t **out_op);
+export xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_op_t **out_op);
+export xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *op);
+export xbapi_op_set_t *xbapi_init_op_set();
+export void xbapi_free_op_set(xbapi_op_set_t *set);
+export xbapi_op_status_e status_from_operation(xbapi_op_t *op);
+export uint8_t *data_from_operation(xbapi_op_t *op);
 
 #ifdef __cplusplus
 } /* end of extern "C" */

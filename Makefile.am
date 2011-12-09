@@ -4,7 +4,7 @@ CFLAGS += -Wall -Werror -Wextra
 
 lib_LTLIBRARIES = libxbapi.la
 libxbapi_la_SOURCES = src/xbapi.c
-libxbapi_la_CFLAGS = -I$(srcdir)/include -fvisibility=hidden $(TALLOC_CFLAGS)
+libxbapi_la_CFLAGS = -I$(srcdir)/include -fvisibility=hidden -fshort-enums $(TALLOC_CFLAGS)
 libxbapi_la_LDFLAGS = -no-undefined -version-info 0:0:0 $(TALLOC_LIBS)
 
 libxbapi_la_includedir = $(includedir)

@@ -13,7 +13,6 @@
 #include <CUnit/Basic.h>
 
 #include "xbapi.h"
-
 #include "_xbapi.h"
 
 xbapi_err_e xbapi_errno( xbapi_rc_t rc ) {
@@ -56,10 +55,10 @@ const char *xbapi_strerror( xbapi_rc_t rc ) {
 __attribute__((const))
 static bool is_control( uint8_t byte ) {
 	switch( byte ) {
-		case XBAPI_FRAME_DELIM:
-		case XBAPI_ESCAPE:
-		case XBAPI_XON:
-		case XBAPI_XOFF:
+		case XBAPI_CONTROL_FRAME_DELIM:
+		case XBAPI_CONTROL_ESCAPE:
+		case XBAPI_CONTROL_XON:
+		case XBAPI_CONTROL_XOFF:
 			return true;
 		default:
 			return false;
@@ -76,11 +75,11 @@ static xbapi_rc_t xbapi_unescape( uint8_t **buf ) {
 	size_t blen = talloc_array_length(b), retlen = blen;
 	if( blen < 2 ) return xbapi_rc(XBAPI_ERR_NOERR);
 
-	for( size_t i = 0; i < blen; i++ ) if( b[i] == XBAPI_ESCAPE ) retlen--;
+	for( size_t i = 0; i < blen; i++ ) if( b[i] == XBAPI_CONTROL_ESCAPE ) retlen--;
 
 	size_t retidx = 0, bidx = 0;
 	do {
-		if( b[bidx] == XBAPI_ESCAPE ) {
+		if( b[bidx] == XBAPI_CONTROL_ESCAPE ) {
 			bidx++;
 			if( bidx >= blen ) return xbapi_rc(XBAPI_ERR_BADPACKET);
 			b[retidx] = b[bidx] ^ 0x20;
@@ -138,7 +137,7 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	assert(*buf != NULL);
 
 	uint8_t *b = *buf;
-	if( b[0] != XBAPI_FRAME_DELIM ) return xbapi_rc(XBAPI_ERR_BADPACKET);
+	if( b[0] != XBAPI_CONTROL_FRAME_DELIM ) return xbapi_rc(XBAPI_ERR_BADPACKET);
 
 	xbapi_rc_t rc;
 	if( xbapi_errno(rc = xbapi_unescape(buf)) != XBAPI_ERR_NOERR ) return rc;
@@ -208,7 +207,7 @@ xbapi_rc_t xbapi_wrap( uint8_t **buf ) {
 	if( xbapi_errno(rc = xbapi_escape(buf)) != XBAPI_ERR_NOERR ) return rc;
 
 	// Restore the frame delimiter after we've escaped
-	b[0] = XBAPI_FRAME_DELIM;
+	b[0] = XBAPI_CONTROL_FRAME_DELIM;
 
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
@@ -309,6 +308,24 @@ const char *at_cmd_str(xbapi_at_e command) {
 	return AT_COMMAND_STRINGS[command];
 }
 
+
+xbapi_modem_status_e modem_status_to_enum(uint8_t status) {
+	switch (status) {
+		case XBAPI_MODEM_HARDWARE_RESET:
+		case XBAPI_MODEM_WDT_RESET:
+		case XBAPI_MODEM_JOINED_NETWORK:
+		case XBAPI_MODEM_DISASSOCIATED:
+		case XBAPI_MODEM_COORDINATOR_STARTED:
+		case XBAPI_MODEM_SECURITY_KEY_UPDATED:
+		case XBAPI_MODEM_OVERVOLTAGE:
+		case XBAPI_MODEM_CONFIG_CHANGED_WHILE_JOINING:
+		case XBAPI_MODEM_STACK_ERROR:
+			return (xbapi_modem_status_e)status;
+		default:
+			return XBAPI_MODEM_STATUS_UNKNOWN;
+	}
+}
+
 xbapi_rc_t xbapi_send(xbapi_conn_t *conn, uint8_t *packet) {
 	errno = 0;
 	// Casting a size_t to an int
@@ -322,9 +339,10 @@ xbapi_rc_t xbapi_send(xbapi_conn_t *conn, uint8_t *packet) {
 }
 
 
-xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e command, xbapi_at_arg_u *args) {
+xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_at_arg_u *args, xbapi_op_t **out_op) {
 	assert(conn != NULL);
-	assert(op != NULL);
+	assert(ops != NULL);
+	assert(out_op != NULL);
 
 	conn->frame_id++;
 	if (conn->frame_id == 0) conn->frame_id++;
@@ -335,8 +353,11 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e com
 	uint8_t *packet = NULL;
 
 	// Set up the operation structure (frame id, clear result)
+	xbapi_op_t *op;
+	xbapi_rc_t rc = create_operation(ops, &op);
+	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 	op->frame_id = conn->frame_id;
-	op->status = XBAPI_OP_STATUS_PENDING;
+	*out_op = op;
 
 	// Allocate space for the packet and copy the args into it
 	switch (command) {
@@ -479,9 +500,10 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e com
 	return xbapi_send(conn, packet);
 }
 
-xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e command) {
+xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_op_t **out_op) {
 	assert(conn != NULL);
-	assert(op != NULL);
+	assert(ops != NULL);
+	assert(out_op != NULL);
 
 	conn->frame_id++;
 	if (conn->frame_id == 0) conn->frame_id++;
@@ -494,14 +516,16 @@ xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_t *op, xbapi_at_e c
 	xbapi_wrap(&packet);
 
 	// Set up the operation structure (frame id, clear result)
+	xbapi_op_t *op;
+	xbapi_rc_t rc = create_operation(ops, &op);
+	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 	op->frame_id = conn->frame_id;
-	op->status = XBAPI_OP_STATUS_PENDING;
+	*out_op = op;
 
 	return xbapi_send(conn, packet);
 }
 
-xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
-	(void)ops;
+xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
 	static const int BUF_SIZE = 100;
 	int buf_len = 0;
 	uint8_t buf[BUF_SIZE];
@@ -512,8 +536,8 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 	if (conn->rollover_escape) {
 		buffer_len = talloc_array_length(conn->buffer);
 		conn->rollover_escape = false;
-		conn->buffer = talloc_realloc_size(NULL, conn->buffer, buffer_len + 1);
-		conn->buffer[buffer_len] = XBAPI_ESCAPE;
+		conn->buffer = talloc_realloc_size(conn, conn->buffer, buffer_len + 1);
+		conn->buffer[buffer_len] = XBAPI_CONTROL_ESCAPE;
 	}
 
 	// Read the serial device and append the data to the existing buffer
@@ -523,7 +547,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 
 		// Casting a size_t to an int
 		buffer_len = talloc_array_length(conn->buffer);
-		conn->buffer = talloc_realloc_size(NULL, conn->buffer, buffer_len + buf_len);
+		conn->buffer = talloc_realloc_size(conn, conn->buffer, buffer_len + buf_len);
 		if(conn->buffer == NULL) return xbapi_rc_sys();
 		memcpy(conn->buffer + buffer_len, buf, buf_len);
 	} while (buf_len == BUF_SIZE);
@@ -532,7 +556,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 	buffer_len = talloc_array_length(conn->buffer);
 	bool has_trailing = false;
 	for (uint8_t *ptr = conn->buffer + buffer_len - 1; ptr >= conn->buffer; ptr--) {
-		if (*ptr == XBAPI_ESCAPE) {
+		if (*ptr == XBAPI_CONTROL_ESCAPE) {
 			has_trailing = !has_trailing;
 		} else
 			break;
@@ -542,7 +566,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 	buffer_len = talloc_array_length(conn->buffer);
 	if (has_trailing) {
 		conn->rollover_escape = true;
-		conn->buffer = talloc_realloc_size(NULL, conn->buffer, buffer_len - 1);
+		conn->buffer = talloc_realloc_size(conn, conn->buffer, buffer_len - 1);
 		buffer_len--;
 	}
 
@@ -554,7 +578,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 	uint8_t *ptr = conn->buffer;
 	while (buffer_len > 0) {
 		// Toss out data until we find a frame start delimiter
-		while (*ptr != XBAPI_FRAME_DELIM && buffer_len > 0) {
+		while (*ptr != XBAPI_CONTROL_FRAME_DELIM && buffer_len > 0) {
 			ptr++;
 			buffer_len--;
 		}
@@ -568,19 +592,14 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 		// If we don't have the entire frame, save what we have in the connection buffer and return
 		size_t packet_len = frm_len + 4;
 		size_t orig_packet_len = packet_len;
-		if ((frm_len == -1) || (buffer_len < packet_len)) {
-			conn->buffer = talloc_realloc_size(NULL, conn->buffer, buffer_len);
-			if(conn->buffer == NULL && buffer_len > 0) return xbapi_rc_sys();
-			memcpy(conn->buffer, ptr, buffer_len);
-			break;
-		}
+		if ((frm_len == -1) || (buffer_len < packet_len)) break;
 
 		// Unwrap the frame
 		uint8_t *packet = talloc_array_size(NULL, 1, packet_len);
 		if(packet == NULL) return xbapi_rc_sys();
 		memcpy(packet, ptr, packet_len);
-		xbapi_rc_t rc;
-		if (xbapi_errno(rc = xbapi_unwrap(&packet)) != XBAPI_ERR_NOERR) return rc;
+		xbapi_rc_t rc = xbapi_unwrap(&packet);
+		if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 		packet_len = talloc_array_length(packet);
 
 		// Handle the message
@@ -601,38 +620,156 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_t *ops) {
 				}
 
 				// Find the corresponding operation structure
-				size_t ops_len = talloc_array_length(ops);
-				for (size_t i = 0; i < ops_len; i++) {
-					if (ops[i].frame_id == frame_id) {
-						ops[i].status = status;
-						ops[i].data = data;
+				for (size_t i = 0; i < ops->pending_count; i++) {
+					xbapi_op_t *op = ops->ops_pending[i];
+					if (op->frame_id == frame_id) {
+						op->status = status;
+						op->data = data;
+						move_operation(ops, op);
 						break;
 					}
 				}
-			break;
-			//default:
-				//assert(false);
+				break;
+
+			case XBAPI_FRAME_MODEM_STAT:
+				assert(packet_len == 2);
+				conn->latest_modem_status = modem_status_to_enum(packet[1]);
+				break;
+
+			case XBAPI_FRAME_TX_STAT:
+			case XBAPI_FRAME_RX_PACKET:
+			case XBAPI_FRAME_NODE_ID:
+
+			// We don't support these messages, so just ignore them
+			case XBAPI_FRAME_IO_DATA_RX:
+			case XBAPI_FRAME_SENSOR_READ:
+			case XBAPI_FRAME_RT_RC_INDIC:
+			case XBAPI_FRAME_M_1_RT_REQ:
+			case XBAPI_FRAME_XRX_INDIC:
+			case XBAPI_FRAME_RMT_CMD_RES:
+			case XBAPI_FRAME_UPDATE_STAT:
+				break;
+
+			// We shouldn't receive these messages (these are host to xbee only)
+			case XBAPI_FRAME_AT_CMD:
+			case XBAPI_FRAME_AT_QUEUED:
+			case XBAPI_FRAME_XADDR_CMD:
+			case XBAPI_FRAME_RMT_CMD_REQ:
+			case XBAPI_FRAME_CRT_SRC_RT:
+			default:
+				assert(false);
 		}
 
 		ptr += orig_packet_len;
 		buffer_len -= orig_packet_len;
+		talloc_free(packet);
+	}
+	if (buffer_len > 0) {
+		memmove(conn->buffer, ptr, buffer_len);
+		conn->buffer = talloc_realloc_size(conn, conn->buffer, buffer_len);
+		if (conn->buffer == NULL && buffer_len > 0) return xbapi_rc_sys();
+	} else {
+		talloc_free(conn->buffer);
+		conn->buffer = NULL;
 	}
 
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
 
-xbapi_conn_t xbapi_init_conn(int fd) {
-	xbapi_conn_t rt = {
-		.fd = fd,
-		.frame_id = 0,
-		.buffer = talloc_array_size(NULL, 1, 0),
-		.rollover_escape = false
-	};
+xbapi_conn_t *xbapi_init_conn(int fd) {
+	xbapi_conn_t *rt = talloc(NULL, xbapi_conn_t);
+	rt->fd = fd;
+	rt->frame_id = 0;
+	rt->buffer = NULL;
+	rt->rollover_escape = false;
 	return rt;
 }
 
 void xbapi_free_conn(xbapi_conn_t *conn) {
-	talloc_free(conn->buffer);
+	talloc_free(conn);
 	conn = NULL;
+}
+
+xbapi_op_set_t *xbapi_init_op_set() {
+	xbapi_op_set_t *set = talloc(NULL, xbapi_op_set_t);
+	set->ops_success = talloc_array(set, xbapi_op_t*, INITIAL_OP_SET_SIZE);
+	set->ops_failure = talloc_array(set, xbapi_op_t*, INITIAL_OP_SET_SIZE);
+	set->ops_pending = talloc_array(set, xbapi_op_t*, INITIAL_OP_SET_SIZE);
+	set->success_count = 0;
+	set->failure_count = 0;
+	set->pending_count = 0;
+	return set;
+}
+
+void xbapi_free_op_set(xbapi_op_set_t *set) {
+	talloc_free(set);
+	set = NULL;
+}
+
+xbapi_rc_t create_operation(xbapi_op_set_t *set, xbapi_op_t **op) {
+	assert(op != NULL);
+
+	*op = talloc(set, xbapi_op_t);
+	(*op)->status = XBAPI_OP_STATUS_PENDING;
+
+	xbapi_rc_t rc = move_operation(set, *op);
+	if (xbapi_errno(rc) != XBAPI_ERR_NOERR ) return rc;
+
+	return xbapi_rc(XBAPI_ERR_NOERR);
+}
+
+xbapi_rc_t move_operation(xbapi_op_set_t *set, xbapi_op_t *op) {
+	// Remove the operation from the pending queue (if it exists)
+	for (size_t i = 0; i < set->pending_count; i++) {
+		if ((set->ops_pending[i]) == op) {
+			for (size_t j = i; j < set->pending_count - 1; j++) set->ops_pending[j] = set->ops_pending[j + 1];
+			break;
+		}
+	}
+
+	// Copy the operation into the appropriate queue
+	switch(op->status) {
+		case XBAPI_OP_STATUS_OK:
+			if (set->success_count == talloc_array_length(set->ops_success)) {
+				set->ops_success = talloc_realloc_size(set, set->ops_success, talloc_array_length(set->ops_success) + INITIAL_OP_SET_SIZE);
+				if (set->ops_success == NULL) return xbapi_rc_sys();
+			}
+			set->ops_success[set->success_count] = op;
+			set->success_count++;
+			break;
+		case XBAPI_OP_STATUS_ERROR:
+		case XBAPI_OP_STATUS_INVALID_CMD:
+		case XBAPI_OP_STATUS_INVALID_PARAM:
+		case XBAPI_OP_STATUS_TX_FAILURE:
+			if (set->failure_count == talloc_array_length(set->ops_failure)) {
+				set->ops_failure = talloc_realloc_size(set, set->ops_failure, talloc_array_length(set->ops_failure) + INITIAL_OP_SET_SIZE);
+				if (set->ops_failure == NULL) return xbapi_rc_sys();
+			}
+			set->ops_failure[set->failure_count] = op;
+			set->failure_count++;
+			break;
+		case XBAPI_OP_STATUS_PENDING:
+			if (set->pending_count == talloc_array_length(set->ops_pending)) {
+				set->ops_pending = talloc_realloc_size(set, set->ops_pending, talloc_array_length(set->ops_pending) + INITIAL_OP_SET_SIZE);
+				if (set->ops_pending == NULL) return xbapi_rc_sys();
+			}
+			set->ops_pending[set->pending_count] = op;
+			set->pending_count++;
+			break;
+	}
+
+	return xbapi_rc(XBAPI_ERR_NOERR);
+}
+
+// Get the list of successes and failures
+
+xbapi_op_status_e status_from_operation(xbapi_op_t *op) {
+	assert(op != NULL);
+	return op->status;
+}
+
+uint8_t *data_from_operation(xbapi_op_t *op) {
+	assert(op != NULL);
+	return op->data;
 }
 
