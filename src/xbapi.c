@@ -14,6 +14,7 @@
 
 #include "xbapi.h"
 #include "_xbapi.h"
+#include "_packets.h"
 
 xbapi_err_e xbapi_errno( xbapi_rc_t rc ) {
 	return rc.code;
@@ -67,7 +68,7 @@ static bool is_control( uint8_t byte ) {
 
 // buf must be talloc'ed
 // if an error occurs, the data in buf is indeterminate
-static xbapi_rc_t xbapi_unescape( uint8_t **buf ) {
+xbapi_rc_t xbapi_unescape( uint8_t **buf ) {
 	assert(buf != NULL);
 	assert(*buf != NULL);
 
@@ -97,7 +98,7 @@ static xbapi_rc_t xbapi_unescape( uint8_t **buf ) {
 }
 
 // buf must be talloc'ed
-static xbapi_rc_t xbapi_escape( uint8_t **buf ) {
+xbapi_rc_t xbapi_escape( uint8_t **buf ) {
 	assert(buf != NULL);
 	assert(*buf != NULL);
 
@@ -309,22 +310,6 @@ const char *at_cmd_str(xbapi_at_e command) {
 }
 
 
-xbapi_modem_status_e modem_status_to_enum(uint8_t status) {
-	switch (status) {
-		case XBAPI_MODEM_HARDWARE_RESET:
-		case XBAPI_MODEM_WDT_RESET:
-		case XBAPI_MODEM_JOINED_NETWORK:
-		case XBAPI_MODEM_DISASSOCIATED:
-		case XBAPI_MODEM_COORDINATOR_STARTED:
-		case XBAPI_MODEM_SECURITY_KEY_UPDATED:
-		case XBAPI_MODEM_OVERVOLTAGE:
-		case XBAPI_MODEM_CONFIG_CHANGED_WHILE_JOINING:
-		case XBAPI_MODEM_STACK_ERROR:
-			return (xbapi_modem_status_e)status;
-		default:
-			return XBAPI_MODEM_STATUS_UNKNOWN;
-	}
-}
 
 xbapi_rc_t xbapi_send(xbapi_conn_t *conn, uint8_t *packet) {
 	errno = 0;
@@ -337,7 +322,6 @@ xbapi_rc_t xbapi_send(xbapi_conn_t *conn, uint8_t *packet) {
 	}
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
-
 
 xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_at_arg_u *args, xbapi_op_t **out_op) {
 	assert(conn != NULL);
@@ -603,27 +587,25 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
 		packet_len = talloc_array_length(packet);
 
 		// Handle the message
-		switch (packet[0]) {
+		switch (frame_type_from_packet(packet)) {
 			case XBAPI_FRAME_AT_CMD_RES:
-				assert(packet_len >= 5);
-				uint8_t frame_id = packet[1];
-				uint8_t status = packet[4];
-				assert(status <= XBAPI_OP_STATUS_TX_FAILURE);
+				assert(packet_len >= AT_CMD_RES_MIN_LEN);
 
 				uint8_t *data;
-				if (packet_len > 5) {
-					data = talloc_array(NULL, uint8_t, packet_len - 5);
+				if (command_data_len_from_at_cmd_res(packet)) {
+					data = talloc_array(NULL, uint8_t, command_data_len_from_at_cmd_res(packet));
 					if(conn->buffer == NULL) return xbapi_rc_sys();
-					memcpy(data, packet + 5, packet_len - 5);
+					memcpy(data, command_data_from_at_cmd_res(packet), command_data_len_from_at_cmd_res(packet));
 				} else {
 					data = NULL;
 				}
 
+				uint8_t frame_id = frame_id_from_at_cmd_res(packet);
 				// Find the corresponding operation structure
 				for (size_t i = 0; i < ops->pending_count; i++) {
 					xbapi_op_t *op = ops->ops_pending[i];
 					if (op->frame_id == frame_id) {
-						op->status = status;
+						op->status = command_status_from_at_cmd_res(packet);
 						op->data = data;
 						move_operation(ops, op);
 						break;
@@ -632,13 +614,52 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
 				break;
 
 			case XBAPI_FRAME_MODEM_STAT:
-				assert(packet_len == 2);
-				conn->latest_modem_status = modem_status_to_enum(packet[1]);
+				assert(packet_len == MODEM_STAT_LEN);
+				conn->latest_modem_status = status_from_modem_stat(packet);
 				break;
 
 			case XBAPI_FRAME_TX_STAT:
 			case XBAPI_FRAME_RX_PACKET:
 			case XBAPI_FRAME_NODE_ID:
+				assert(packet_len >= NODE_ID_MIN_LEN);
+
+				printf("Source Address: %llX\n", source_address_from_node_id(packet));
+				printf("Source Network Address: %X\n", source_network_address_from_node_id(packet));
+				printf("Receive Options: %d\n", receive_options_from_node_id(packet));
+				printf("Remote Address: %llX\n", remote_address_from_node_id(packet));
+				printf("Remote Network Address: %X\n", remote_network_address_from_node_id(packet));
+				printf("Node Identifier: %s\n", ni_string_from_node_id(packet));
+				printf("Parent Network Address: %X\n", parent_network_address_from_node_id(packet));
+				switch (device_type_from_node_id(packet)) {
+					case XBAPI_DEVICE_TYPE_COORDINATOR:
+						printf("Device Type: Coordinator\n");
+						break;
+					case XBAPI_DEVICE_TYPE_ROUTER:
+						printf("Device Type: Router\n");
+						break;
+					case XBAPI_DEVICE_TYPE_END_DEVICE:
+						printf("Device Type: End Device\n");
+						break;
+					case XBAPI_DEVICE_TYPE_INVALID:
+						printf("Device Type: Invalid\n");
+				}
+				switch (source_event_from_node_id(packet)) {
+					case XBAPI_SOURCE_EVENT_PUSHBUTTON:
+						printf("Source Event: Pushbutton\n");
+						break;
+					case XBAPI_SOURCE_EVENT_JOINED:
+						printf("Source Event: Joined\n");
+						break;
+					case XBAPI_SOURCE_EVENT_POWER_CYCLE:
+						printf("Source Event: Power Cycle\n");
+						break;
+					case XBAPI_SOURCE_EVENT_INVALID:
+						printf("Source Event: Invalid\n");
+				}
+				printf("Profile ID: %X\n", profile_id_from_node_id(packet));
+				printf("Manufacturer ID: %X\n", manufacturer_id_from_node_id(packet));
+
+				break;
 
 			// We don't support these messages, so just ignore them
 			case XBAPI_FRAME_IO_DATA_RX:

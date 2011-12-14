@@ -3,7 +3,7 @@ ACLOCAL_AMFLAGS = -I m4
 CFLAGS += -Wall -Werror -Wextra
 
 lib_LTLIBRARIES = libxbapi.la
-libxbapi_la_SOURCES = src/xbapi.c
+libxbapi_la_SOURCES = src/xbapi.c src/packets.c
 libxbapi_la_CFLAGS = -I$(srcdir)/include -fvisibility=hidden -fshort-enums $(TALLOC_CFLAGS)
 libxbapi_la_LDFLAGS = -no-undefined -version-info 0:0:0 $(TALLOC_LIBS)
 
@@ -18,7 +18,7 @@ cunit_LDFLAGS = $(TALLOC_LIBS) $(CUNIT_LIBS)
 
 TESTS = $(check_PROGRAMS)
 
-noinst_HEADERS = include/_xbapi.h
+noinst_HEADERS = include/_xbapi.h include/_packets.h
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = xbapi.pc

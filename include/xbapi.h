@@ -7,6 +7,8 @@ extern "C" {
 
 #define export __attribute__((visibility("default")))
 
+#include <stdint.h>
+
 typedef enum {
 	XBAPI_ERR_NOERR,
 	XBAPI_ERR_SYS,
