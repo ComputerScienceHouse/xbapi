@@ -509,7 +509,11 @@ xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_a
 	return xbapi_send(conn, packet);
 }
 
-xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
+xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_callbacks_t *callbacks) {
+	assert(conn != NULL);
+	assert(ops != NULL);
+	assert(callbacks != NULL);
+
 	static const int BUF_SIZE = 100;
 	int buf_len = 0;
 	uint8_t buf[BUF_SIZE];
@@ -623,51 +627,25 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
 			case XBAPI_FRAME_NODE_ID:
 				assert(packet_len >= NODE_ID_MIN_LEN);
 
-				printf("Source Address: %llX\n", source_address_from_node_id(packet));
-				printf("Source Network Address: %X\n", source_network_address_from_node_id(packet));
-				switch (receive_options_from_node_id(packet)) {
-					case XBAPI_RX_OPT_ACKNOWLEDGE:
-						printf("Receive Options: Acknowledge\n");
-						break;
-					case XBAPI_RX_OPT_BROADCAST:
-						printf("Receive Options: Broadcast\n");
-						break;
-					case XBAPI_RX_OPT_INVALID:
-						printf("Receive Options: Invalid (%d)\n", packet[11]);
-				}
-				printf("Remote Address: %llX\n", remote_address_from_node_id(packet));
-				printf("Remote Network Address: %X\n", remote_network_address_from_node_id(packet));
-				printf("Node Identifier: %s\n", ni_string_from_node_id(packet));
-				printf("Parent Network Address: %X\n", parent_network_address_from_node_id(packet));
-				switch (device_type_from_node_id(packet)) {
-					case XBAPI_DEVICE_TYPE_COORDINATOR:
-						printf("Device Type: Coordinator\n");
-						break;
-					case XBAPI_DEVICE_TYPE_ROUTER:
-						printf("Device Type: Router\n");
-						break;
-					case XBAPI_DEVICE_TYPE_END_DEVICE:
-						printf("Device Type: End Device\n");
-						break;
-					case XBAPI_DEVICE_TYPE_INVALID:
-						printf("Device Type: Invalid\n");
-				}
-				switch (source_event_from_node_id(packet)) {
-					case XBAPI_SOURCE_EVENT_PUSHBUTTON:
-						printf("Source Event: Pushbutton\n");
-						break;
-					case XBAPI_SOURCE_EVENT_JOINED:
-						printf("Source Event: Joined\n");
-						break;
-					case XBAPI_SOURCE_EVENT_POWER_CYCLE:
-						printf("Source Event: Power Cycle\n");
-						break;
-					case XBAPI_SOURCE_EVENT_INVALID:
-						printf("Source Event: Invalid\n");
-				}
-				printf("Profile ID: %X\n", profile_id_from_node_id(packet));
-				printf("Manufacturer ID: %X\n", manufacturer_id_from_node_id(packet));
+				if (callbacks->node_connected == NULL) break;
 
+				xbapi_node_identification_t *node = talloc(NULL, xbapi_node_identification_t);
+
+				node->source_address         = source_address_from_node_id(packet);
+				node->source_network_address = source_network_address_from_node_id(packet);
+				node->remote_address         = remote_address_from_node_id(packet);
+				node->remote_network_address = remote_network_address_from_node_id(packet);
+				node->receive_options        = receive_options_from_node_id(packet);
+				node->node_identifier        = ni_string_from_node_id(packet);
+				node->parent_network_address = parent_network_address_from_node_id(packet);
+				node->device_type            = device_type_from_node_id(packet);
+				node->source_event           = source_event_from_node_id(packet);
+				node->profile_id             = profile_id_from_node_id(packet);
+				node->manufacturer_id        = manufacturer_id_from_node_id(packet);
+
+				callbacks->node_connected(node);
+
+				talloc_free(node);
 				break;
 
 			// We don't support these messages, so just ignore them

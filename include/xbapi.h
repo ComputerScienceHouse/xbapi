@@ -157,6 +157,46 @@ typedef enum {
 	XBAPI_MODEM_STATUS_UNKNOWN
 } xbapi_modem_status_e;
 
+typedef enum {
+	XBAPI_RX_OPT_ACKNOWLEDGE = 0x01,
+	XBAPI_RX_OPT_BROADCAST   = 0x02,
+	XBAPI_RX_OPT_INVALID
+} xbapi_rx_opt_e;
+
+typedef enum {
+	XBAPI_DEVICE_TYPE_COORDINATOR = 0x00,
+	XBAPI_DEVICE_TYPE_ROUTER      = 0x01,
+	XBAPI_DEVICE_TYPE_END_DEVICE  = 0x02,
+	XBAPI_DEVICE_TYPE_INVALID
+} xbapi_device_type_e;
+
+typedef enum {
+	XBAPI_SOURCE_EVENT_PUSHBUTTON  = 0x01,
+	XBAPI_SOURCE_EVENT_JOINED      = 0x02,
+	XBAPI_SOURCE_EVENT_POWER_CYCLE = 0x03,
+	XBAPI_SOURCE_EVENT_INVALID
+} xbapi_source_event_e;
+
+typedef struct {
+	uint64_t source_address;
+	uint16_t source_network_address;
+	uint64_t remote_address;
+	uint16_t remote_network_address;
+	xbapi_rx_opt_e receive_options;
+	char *node_identifier;
+	uint16_t parent_network_address;
+	xbapi_device_type_e device_type;
+	xbapi_source_event_e source_event;
+	uint16_t profile_id;
+	uint16_t manufacturer_id;
+} xbapi_node_identification_t;
+
+typedef struct {
+	void(*node_connected)(xbapi_node_identification_t *node);
+} xbapi_callbacks_t;
+
+
+
 struct _xbapi_op_set_t;
 typedef struct _xbapi_op_set_t xbapi_op_set_t;
 
@@ -177,7 +217,7 @@ export const char *xbapi_strerror( xbapi_rc_t err );
 export xbapi_conn_t *xbapi_init_conn(int);
 export xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_at_arg_u *args, xbapi_op_t **out_op);
 export xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_op_t **out_op);
-export xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *op);
+export xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *op, xbapi_callbacks_t *callbacks);
 export xbapi_op_set_t *xbapi_init_op_set();
 export void xbapi_free_op_set(xbapi_op_set_t *set);
 export xbapi_op_status_e status_from_operation(xbapi_op_t *op);

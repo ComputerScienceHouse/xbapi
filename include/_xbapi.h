@@ -37,20 +37,6 @@ struct _xbapi_conn_t{
 	xbapi_modem_status_e latest_modem_status;
 };
 
-typedef enum {
-	XBAPI_DEVICE_TYPE_COORDINATOR = 0x00,
-	XBAPI_DEVICE_TYPE_ROUTER      = 0x01,
-	XBAPI_DEVICE_TYPE_END_DEVICE  = 0x02,
-	XBAPI_DEVICE_TYPE_INVALID
-} xbapi_device_type_e;
-
-typedef enum {
-	XBAPI_SOURCE_EVENT_PUSHBUTTON  = 0x01,
-	XBAPI_SOURCE_EVENT_JOINED      = 0x02,
-	XBAPI_SOURCE_EVENT_POWER_CYCLE = 0x03,
-	XBAPI_SOURCE_EVENT_INVALID
-} xbapi_source_event_e;
-
 xbapi_rc_t xbapi_escape( uint8_t **buf );
 xbapi_rc_t xbapi_unescape( uint8_t **buf );
 

@@ -24,12 +24,6 @@ typedef enum {
 	XBAPI_FRAME_M_1_RT_REQ  = 0xA3
 } xbapi_frame_type_e;
 
-typedef enum {
-	XBAPI_RX_OPT_ACKNOWLEDGE = 0x01,
-	XBAPI_RX_OPT_BROADCAST   = 0x02,
-	XBAPI_RX_OPT_INVALID
-} xbapi_rx_opt_e;
-
 
 xbapi_frame_type_e frame_type_from_packet(uint8_t *packet);
 
