@@ -625,7 +625,16 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
 
 				printf("Source Address: %llX\n", source_address_from_node_id(packet));
 				printf("Source Network Address: %X\n", source_network_address_from_node_id(packet));
-				printf("Receive Options: %d\n", receive_options_from_node_id(packet));
+				switch (receive_options_from_node_id(packet)) {
+					case XBAPI_RX_OPT_ACKNOWLEDGE:
+						printf("Receive Options: Acknowledge\n");
+						break;
+					case XBAPI_RX_OPT_BROADCAST:
+						printf("Receive Options: Broadcast\n");
+						break;
+					case XBAPI_RX_OPT_INVALID:
+						printf("Receive Options: Invalid (%d)\n", packet[11]);
+				}
 				printf("Remote Address: %llX\n", remote_address_from_node_id(packet));
 				printf("Remote Network Address: %X\n", remote_network_address_from_node_id(packet));
 				printf("Node Identifier: %s\n", ni_string_from_node_id(packet));

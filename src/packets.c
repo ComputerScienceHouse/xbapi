@@ -2,6 +2,14 @@
 #include <talloc.h>
 #include "_packets.h"
 
+static inline uint64_t ntohll(uint64_t data) {
+	return ((uint64_t)ntohl((uint32_t)data) << 32 | ntohl((uint32_t)(data >> 32)));
+}
+
+static inline uint64_t htonll(uint64_t data) {
+	return ntohll(data);
+}
+
 xbapi_frame_type_e frame_type_from_packet(uint8_t *packet) {
 	return (xbapi_frame_type_e)packet[0];
 }
@@ -62,9 +70,7 @@ xbapi_modem_status_e status_from_modem_stat(uint8_t *packet) {
 
 // Node Identification
 uint64_t source_address_from_node_id(uint8_t *packet) {
-	//ntohll(*(uint64_t *)(packet + 1));
-	(void)packet;
-	return 0;
+	return ntohll(*(uint64_t *)(packet + 1));
 }
 
 uint16_t source_network_address_from_node_id(uint8_t *packet) {
@@ -72,9 +78,7 @@ uint16_t source_network_address_from_node_id(uint8_t *packet) {
 }
 
 uint64_t remote_address_from_node_id(uint8_t *packet) {
-	//ntohll(*(uint64_t *)(packet + 14));
-	(void)packet;
-	return 0;
+	return ntohll(*(uint64_t *)(packet + 14));
 }
 
 uint16_t remote_network_address_from_node_id(uint8_t *packet) {
