@@ -326,7 +326,6 @@ xbapi_rc_t xbapi_send(xbapi_conn_t *conn, uint8_t *packet) {
 xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_at_arg_u *args, xbapi_op_t **out_op) {
 	assert(conn != NULL);
 	assert(ops != NULL);
-	assert(out_op != NULL);
 
 	conn->frame_id++;
 	if (conn->frame_id == 0) conn->frame_id++;
@@ -341,7 +340,7 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_
 	xbapi_rc_t rc = create_operation(ops, &op);
 	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 	op->frame_id = conn->frame_id;
-	*out_op = op;
+	if (out_op != NULL) *out_op = op;
 
 	// Allocate space for the packet and copy the args into it
 	switch (command) {
@@ -487,7 +486,6 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_
 xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_op_t **out_op) {
 	assert(conn != NULL);
 	assert(ops != NULL);
-	assert(out_op != NULL);
 
 	conn->frame_id++;
 	if (conn->frame_id == 0) conn->frame_id++;
@@ -504,7 +502,7 @@ xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_a
 	xbapi_rc_t rc = create_operation(ops, &op);
 	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 	op->frame_id = conn->frame_id;
-	*out_op = op;
+	if (out_op != NULL) *out_op = op;
 
 	return xbapi_send(conn, packet);
 }
@@ -753,6 +751,7 @@ xbapi_rc_t move_operation(xbapi_op_set_t *set, xbapi_op_t *op) {
 	for (size_t i = 0; i < set->pending_count; i++) {
 		if ((set->ops_pending[i]) == op) {
 			for (size_t j = i; j < set->pending_count - 1; j++) set->ops_pending[j] = set->ops_pending[j + 1];
+			set->pending_count--;
 			break;
 		}
 	}
