@@ -7,13 +7,6 @@
 
 static const int INITIAL_OP_SET_SIZE = 5;
 
-typedef enum {
-	XBAPI_CONTROL_FRAME_DELIM = 0x7E,
-	XBAPI_CONTROL_ESCAPE      = 0x7D,
-	XBAPI_CONTROL_XON         = 0x11,
-	XBAPI_CONTROL_XOFF        = 0x13
-} xbapi_control_chars_e;
-
 struct _xbapi_op_t {
 	uint8_t frame_id;
 	xbapi_op_status_e status;

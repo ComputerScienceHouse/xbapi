@@ -56,10 +56,10 @@ const char *xbapi_strerror( xbapi_rc_t rc ) {
 __attribute__((const))
 static bool is_control( uint8_t byte ) {
 	switch( byte ) {
-		case XBAPI_CONTROL_FRAME_DELIM:
-		case XBAPI_CONTROL_ESCAPE:
-		case XBAPI_CONTROL_XON:
-		case XBAPI_CONTROL_XOFF:
+		case (uint8_t)_XBAPI_CONTROL_FRAME_DELIM:
+		case (uint8_t)_XBAPI_CONTROL_ESCAPE:
+		case (uint8_t)_XBAPI_CONTROL_XON:
+		case (uint8_t)_XBAPI_CONTROL_XOFF:
 			return true;
 		default:
 			return false;
@@ -76,11 +76,11 @@ xbapi_rc_t xbapi_unescape( uint8_t **buf ) {
 	size_t blen = talloc_array_length(b), retlen = blen;
 	if( blen < 2 ) return xbapi_rc(XBAPI_ERR_NOERR);
 
-	for( size_t i = 0; i < blen; i++ ) if( b[i] == XBAPI_CONTROL_ESCAPE ) retlen--;
+	for( size_t i = 0; i < blen; i++ ) if( b[i] == _XBAPI_CONTROL_ESCAPE ) retlen--;
 
 	size_t retidx = 0, bidx = 0;
 	do {
-		if( b[bidx] == XBAPI_CONTROL_ESCAPE ) {
+		if( b[bidx] == _XBAPI_CONTROL_ESCAPE ) {
 			bidx++;
 			if( bidx >= blen ) return xbapi_rc(XBAPI_ERR_BADPACKET);
 			b[retidx] = b[bidx] ^ 0x20;
@@ -138,7 +138,7 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	assert(*buf != NULL);
 
 	uint8_t *b = *buf;
-	if( b[0] != XBAPI_CONTROL_FRAME_DELIM ) return xbapi_rc(XBAPI_ERR_BADPACKET);
+	if( b[0] != _XBAPI_CONTROL_FRAME_DELIM ) return xbapi_rc(XBAPI_ERR_BADPACKET);
 
 	xbapi_rc_t rc;
 	if( xbapi_errno(rc = xbapi_unescape(buf)) != XBAPI_ERR_NOERR ) return rc;
@@ -208,7 +208,7 @@ xbapi_rc_t xbapi_wrap( uint8_t **buf ) {
 	if( xbapi_errno(rc = xbapi_escape(buf)) != XBAPI_ERR_NOERR ) return rc;
 
 	// Restore the frame delimiter after we've escaped
-	b[0] = XBAPI_CONTROL_FRAME_DELIM;
+	b[0] = _XBAPI_CONTROL_FRAME_DELIM;
 
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
@@ -333,7 +333,7 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_
 
 	const char *cmdstr = at_cmd_str(command);
 	static const int PACKET_HEAD_LEN = 4;
-	uint8_t packet_head[] = { XBAPI_FRAME_AT_CMD, conn->frame_id, cmdstr[0], cmdstr[1] };
+	uint8_t packet_head[] = { _XBAPI_FRAME_AT_CMD, conn->frame_id, cmdstr[0], cmdstr[1] };
 	uint8_t *packet = NULL;
 
 	// Set up the operation structure (frame id, clear result)
@@ -494,7 +494,7 @@ xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_a
 
 	const char *cmdstr = at_cmd_str(command);
 	static const int PACKET_LEN = 4;
-	uint8_t packet_data[] = { XBAPI_FRAME_AT_CMD, conn->frame_id, cmdstr[0], cmdstr[1] };
+	uint8_t packet_data[] = { _XBAPI_FRAME_AT_CMD, conn->frame_id, cmdstr[0], cmdstr[1] };
 	uint8_t *packet = talloc_array_size(NULL, 1, PACKET_LEN);
 	memcpy(packet, packet_data, PACKET_LEN);
 	xbapi_wrap(&packet);
@@ -525,7 +525,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 		buffer_len = talloc_array_length(conn->buffer);
 		conn->rollover_escape = false;
 		conn->buffer = talloc_realloc_size(conn, conn->buffer, buffer_len + 1);
-		conn->buffer[buffer_len] = XBAPI_CONTROL_ESCAPE;
+		conn->buffer[buffer_len] = _XBAPI_CONTROL_ESCAPE;
 	}
 
 	// Read the serial device and append the data to the existing buffer
@@ -544,7 +544,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 	buffer_len = talloc_array_length(conn->buffer);
 	bool has_trailing = false;
 	for (uint8_t *ptr = conn->buffer + buffer_len - 1; ptr >= conn->buffer; ptr--) {
-		if (*ptr == XBAPI_CONTROL_ESCAPE) {
+		if (*ptr == _XBAPI_CONTROL_ESCAPE) {
 			has_trailing = !has_trailing;
 		} else
 			break;
@@ -566,7 +566,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 	uint8_t *ptr = conn->buffer;
 	while (buffer_len > 0) {
 		// Toss out data until we find a frame start delimiter
-		while (*ptr != XBAPI_CONTROL_FRAME_DELIM && buffer_len > 0) {
+		while (*ptr != _XBAPI_CONTROL_FRAME_DELIM && buffer_len > 0) {
 			ptr++;
 			buffer_len--;
 		}
@@ -661,10 +661,11 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 			// We shouldn't receive these messages (these are host to xbee only)
 			case XBAPI_FRAME_AT_CMD:
 			case XBAPI_FRAME_AT_QUEUED:
+			case XBAPI_FRAME_TX_REQ:
 			case XBAPI_FRAME_XADDR_CMD:
 			case XBAPI_FRAME_RMT_CMD_REQ:
 			case XBAPI_FRAME_CRT_SRC_RT:
-			default:
+			case XBAPI_FRAME_INVALID:
 				assert(false);
 		}
 
