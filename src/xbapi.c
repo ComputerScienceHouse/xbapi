@@ -56,10 +56,10 @@ const char *xbapi_strerror( xbapi_rc_t rc ) {
 __attribute__((const))
 static bool is_control( uint8_t byte ) {
 	switch( byte ) {
-		case (uint8_t)_XBAPI_CONTROL_FRAME_DELIM:
-		case (uint8_t)_XBAPI_CONTROL_ESCAPE:
-		case (uint8_t)_XBAPI_CONTROL_XON:
-		case (uint8_t)_XBAPI_CONTROL_XOFF:
+		case _XBAPI_CONTROL_FRAME_DELIM:
+		case _XBAPI_CONTROL_ESCAPE:
+		case _XBAPI_CONTROL_XON:
+		case _XBAPI_CONTROL_XOFF:
 			return true;
 		default:
 			return false;
@@ -591,11 +591,11 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 		packet_len = talloc_array_length(packet);
 
 		// Handle the message
+		uint8_t *data;
 		switch (frame_type_from_packet(packet)) {
 			case XBAPI_FRAME_AT_CMD_RES:
 				assert(packet_len >= AT_CMD_RES_MIN_LEN);
 
-				uint8_t *data;
 				if (command_data_len_from_at_cmd_res(packet)) {
 					data = talloc_array(NULL, uint8_t, command_data_len_from_at_cmd_res(packet));
 					if(conn->buffer == NULL) return xbapi_rc_sys();
@@ -623,7 +623,44 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 				break;
 
 			case XBAPI_FRAME_TX_STAT:
+				assert(packet_len == TX_STAT_LEN);
+
+				// USE THIS frame_id_from_tx_stat(packet);
+				if (callbacks->transmit_completed == NULL) break;
+
+				xbapi_tx_status_t *status = talloc(NULL, xbapi_tx_status_t);
+
+				status->delivery_network_address = delivery_network_address_from_tx_stat(packet);
+				status->retry_count = retry_count_from_tx_stat(packet);
+				status->delivery_status = delivery_status_from_tx_stat(packet);
+				status->discovery_status = discovery_status_from_tx_stat(packet);
+
+				callbacks->transmit_completed(status);
+
+				talloc_free(status);
+				break;
+
 			case XBAPI_FRAME_RX_PACKET:
+				assert(packet_len >= RX_PACKET_MIN_LEN);
+
+				if (callbacks->node_connected == NULL) break;
+
+				xbapi_rx_packet_t *received = talloc(NULL, xbapi_rx_packet_t);
+
+				received->source_address = source_address_from_rx_packet(packet);
+				received->source_network_address = source_network_address_from_rx_packet(packet);
+				received->options = options_from_rx_packet(packet);
+
+				size_t data_len;
+				data = data_from_rx_packet(packet, &data_len);
+				received->data = talloc_array(received, uint8_t, data_len);
+				memcpy(received->data, data, data_len);
+
+				callbacks->received_packet(received);
+
+				talloc_free(received);
+				break;
+
 			case XBAPI_FRAME_NODE_ID:
 				assert(packet_len >= NODE_ID_MIN_LEN);
 

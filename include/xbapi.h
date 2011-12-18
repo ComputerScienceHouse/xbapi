@@ -213,8 +213,63 @@ typedef struct {
 	uint16_t manufacturer_id;
 } xbapi_node_identification_t;
 
+
+typedef enum {
+	XBAPI_DELIVERY_STATUS_SUCCESS,
+	XBAPI_DELIVERY_STATUS_MAC_ACK_FAIL,
+	XBAPI_DELIVERY_STATUS_CCA_FAIL,
+	XBAPI_DELIVERY_STATUS_INVALID_DEST,
+	XBAPI_DELIVERY_STATUS_NET_ACK_FAIL,
+	XBAPI_DELIVERY_STATUS_NOT_JOINED,
+	XBAPI_DELIVERY_STATUS_SELF_ADDRESSED,
+	XBAPI_DELIVERY_STATUS_ADDRESS_NOT_FOUND,
+	XBAPI_DELIVERY_STATUS_ROUTE_NOT_FOUND,
+	XBAPI_DELIVERY_STATUS_NO_RELAY,
+	XBAPI_DELIVERY_STATUS_INVALID_BIND,
+	XBAPI_DELIVERY_STATUS_RESOURCE_1,
+	XBAPI_DELIVERY_STATUS_BROADCAST_APS,
+	XBAPI_DELIVERY_STATUS_UNICAST_APS,
+	XBAPI_DELIVERY_STATUS_RESOURCE_2,
+	XBAPI_DELIVERY_STATUS_TOO_LARGE,
+	XBAPI_DELIVERY_STATUS_INDIRECT,
+	XBAPI_DELIVERY_STATUS_INVALID
+} xbapi_delivery_status_e;
+
+typedef enum {
+	XBAPI_DISCOVERY_STATUS_NONE,
+	XBAPI_DISCOVERY_STATUS_ADDRESS,
+	XBAPI_DISCOVERY_STATUS_ROUTE,
+	XBAPI_DISCOVERY_STATUS_BOTH,
+	XBAPI_DISCOVERY_STATUS_TIMEOUT,
+	XBAPI_DISCOVERY_STATUS_INVALID
+} xbapi_discovery_status_e;
+
+typedef struct {
+	uint16_t delivery_network_address;
+	uint8_t retry_count;
+	xbapi_delivery_status_e delivery_status;
+	xbapi_discovery_status_e discovery_status;
+} xbapi_tx_status_t;
+
+typedef enum {
+	XBAPI_RX_OPTIONS_ACK,
+	XBAPI_RX_OPTIONS_BROADCAST,
+	XBAPI_RX_OPTIONS_ENCRYPTED,
+	XBAPI_RX_OPTIONS_END_DEVICE,
+	XBAPI_RX_OPTIONS_INVALID
+} xbapi_rx_options_e;
+
+typedef struct {
+	uint64_t source_address;
+	uint16_t source_network_address;
+	xbapi_rx_options_e options;
+	uint8_t *data;
+} xbapi_rx_packet_t;
+
 typedef struct {
 	void (*node_connected)(xbapi_node_identification_t *node);
+	void (*transmit_completed)(xbapi_tx_status_t *status);
+	void (*received_packet)(xbapi_rx_packet_t *received);
 } xbapi_callbacks_t;
 
 
