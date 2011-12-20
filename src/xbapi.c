@@ -611,7 +611,16 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 					if (op->frame_id == frame_id) {
 						op->status = command_status_from_at_cmd_res(packet);
 						op->data = data;
-						move_operation(ops, op);
+
+						if (callbacks->operation_completed == NULL) {
+							move_operation(ops, op);
+						} else {
+							if (callbacks->operation_completed(op)) {
+								move_operation(ops, op);
+							} else {
+								remove_operation(ops, op);
+							}
+						}
 						break;
 					}
 				}
@@ -620,6 +629,11 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 			case XBAPI_FRAME_MODEM_STAT:
 				assert(packet_len == MODEM_STAT_LEN);
 				conn->latest_modem_status = status_from_modem_stat(packet);
+
+				if (callbacks->modem_changed != NULL) {
+					callbacks->modem_changed(conn->latest_modem_status);
+				}
+
 				break;
 
 			case XBAPI_FRAME_TX_STAT:
@@ -775,7 +789,7 @@ xbapi_rc_t move_operation(xbapi_op_set_t *set, xbapi_op_t *op) {
 	}
 
 	// Copy the operation into the appropriate queue
-	switch(op->status) {
+	switch (op->status) {
 		case XBAPI_OP_STATUS_OK:
 			if (set->success_count == talloc_array_length(set->ops_success)) {
 				set->ops_success = talloc_realloc_size(set, set->ops_success, talloc_array_length(set->ops_success) + INITIAL_OP_SET_SIZE);
@@ -803,6 +817,42 @@ xbapi_rc_t move_operation(xbapi_op_set_t *set, xbapi_op_t *op) {
 			set->ops_pending[set->pending_count] = op;
 			set->pending_count++;
 			break;
+	}
+
+	return xbapi_rc(XBAPI_ERR_NOERR);
+}
+
+xbapi_rc_t remove_operation(xbapi_op_set_t *set, xbapi_op_t *op) {
+	size_t *count = NULL;
+	xbapi_op_t **list = NULL;
+
+	switch (op->status) {
+		case XBAPI_OP_STATUS_OK:
+			count = &set->success_count;
+			list = set->ops_success;
+			break;
+		case XBAPI_OP_STATUS_ERROR:
+		case XBAPI_OP_STATUS_INVALID_CMD:
+		case XBAPI_OP_STATUS_INVALID_PARAM:
+		case XBAPI_OP_STATUS_TX_FAILURE:
+			count = &set->failure_count;
+			list = set->ops_failure;
+			break;
+		case XBAPI_OP_STATUS_PENDING:
+			count = &set->pending_count;
+			list = set->ops_pending;
+			break;
+		default:
+			xbapi_rc(XBAPI_ERR_BADPARAM);
+	}
+
+	// Remove the operation from the appropriate queue (if it exists)
+	for (size_t i = 0; i < *count; i++) {
+		if ((list[i]) == op) {
+			for (size_t j = i; j < *count - 1; j++) list[j] = list[j + 1];
+			(*count)--;
+			break;
+		}
 	}
 
 	return xbapi_rc(XBAPI_ERR_NOERR);

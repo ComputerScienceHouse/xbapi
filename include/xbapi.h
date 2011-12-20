@@ -8,6 +8,7 @@ extern "C" {
 #define export __attribute__((visibility("default")))
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef enum {
 	XBAPI_ERR_NOERR,
@@ -15,7 +16,8 @@ typedef enum {
 	XBAPI_ERR_OVERFLOW,
 	XBAPI_ERR_BADPACKET,
 	XBAPI_ERR_BUFBIG,
-	XBAPI_ERR_INCWRITE
+	XBAPI_ERR_INCWRITE,
+	XBAPI_ERR_BADPARAM
 } xbapi_err_e;
 
 typedef enum {
@@ -266,13 +268,6 @@ typedef struct {
 	uint8_t *data;
 } xbapi_rx_packet_t;
 
-typedef struct {
-	void (*node_connected)(xbapi_node_identification_t *node);
-	void (*transmit_completed)(xbapi_tx_status_t *status);
-	void (*received_packet)(xbapi_rx_packet_t *received);
-} xbapi_callbacks_t;
-
-
 
 struct _xbapi_op_set_t;
 typedef struct _xbapi_op_set_t xbapi_op_set_t;
@@ -285,6 +280,17 @@ typedef struct _xbapi_conn_t xbapi_conn_t;
 
 export xbapi_err_e xbapi_errno( xbapi_rc_t err );
 export int xbapi_sys_errno( xbapi_rc_t err );
+
+
+typedef struct {
+	void (*node_connected)(xbapi_node_identification_t *node);
+	void (*transmit_completed)(xbapi_tx_status_t *status);
+	void (*received_packet)(xbapi_rx_packet_t *received);
+	void (*modem_changed)(xbapi_modem_status_e status);
+	bool (*operation_completed)(xbapi_op_t *op);
+} xbapi_callbacks_t;
+
+
 
 export xbapi_rc_t
 	xbapi_rc( xbapi_err_e err ),
@@ -300,6 +306,7 @@ export void xbapi_free_op_set(xbapi_op_set_t *set);
 export xbapi_op_status_e status_from_operation(xbapi_op_t *op);
 export uint8_t *data_from_operation(xbapi_op_t *op);
 export xbapi_rc_t xbapi_transmit_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, uint8_t *data, uint64_t destination, xbapi_op_t **out_op);
+export xbapi_rc_t remove_operation(xbapi_op_set_t *set, xbapi_op_t *op);
 
 #ifdef __cplusplus
 } /* end of extern "C" */
