@@ -592,6 +592,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 
 		// Handle the message
 		uint8_t *data;
+		uint8_t frame_id;
 		switch (frame_type_from_packet(packet)) {
 			case XBAPI_FRAME_AT_CMD_RES:
 				assert(packet_len >= AT_CMD_RES_MIN_LEN);
@@ -604,7 +605,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 					data = NULL;
 				}
 
-				uint8_t frame_id = frame_id_from_at_cmd_res(packet);
+				frame_id = frame_id_from_at_cmd_res(packet);
 				// Find the corresponding operation structure
 				for (size_t i = 0; i < ops->pending_count; i++) {
 					xbapi_op_t *op = ops->ops_pending[i];
@@ -639,7 +640,29 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 			case XBAPI_FRAME_TX_STAT:
 				assert(packet_len == TX_STAT_LEN);
 
-				// USE THIS frame_id_from_tx_stat(packet);
+				frame_id = frame_id_from_tx_stat(packet);
+				// Find the corresponding operation structure
+				for (size_t i = 0; i < ops->pending_count; i++) {
+					xbapi_op_t *op = ops->ops_pending[i];
+					if (op->frame_id == frame_id) {
+						//op->status = command_status_from_at_cmd_res(packet);
+						//op->data = data;
+						op->status = 0;
+						op->data = NULL;
+
+						if (callbacks->operation_completed == NULL) {
+							move_operation(ops, op);
+						} else {
+							if (callbacks->operation_completed(op)) {
+								move_operation(ops, op);
+							} else {
+								remove_operation(ops, op);
+							}
+						}
+						break;
+					}
+				}
+
 				if (callbacks->transmit_completed == NULL) break;
 
 				xbapi_tx_status_t *status = talloc(NULL, xbapi_tx_status_t);
@@ -900,7 +923,7 @@ xbapi_rc_t xbapi_transmit_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, uint8_t 
 	rc = create_operation(ops, &op);
 	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 	op->frame_id = conn->frame_id;
-	*out_op = op;
+	if (out_op != NULL) *out_op = op;
 
 	return xbapi_send(conn, packet);
 }
