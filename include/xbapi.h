@@ -136,26 +136,143 @@ typedef struct {
 } xbapi_rc_t;
 
 typedef enum {
-	XBAPI_OP_STATUS_OK            = 0x00,
-	XBAPI_OP_STATUS_ERROR         = 0x01,
-	XBAPI_OP_STATUS_INVALID_CMD   = 0x02,
-	XBAPI_OP_STATUS_INVALID_PARAM = 0x03,
-	XBAPI_OP_STATUS_TX_FAILURE    = 0x04,
+	XBAPI_FRAME_AT_CMD,
+	XBAPI_FRAME_AT_QUEUED,
+	XBAPI_FRAME_TX_REQ,
+	XBAPI_FRAME_XADDR_CMD,
+	XBAPI_FRAME_RMT_CMD_REQ,
+	XBAPI_FRAME_CRT_SRC_RT,
+	XBAPI_FRAME_AT_CMD_RES,
+	XBAPI_FRAME_MODEM_STAT,
+	XBAPI_FRAME_TX_STAT,
+	XBAPI_FRAME_RX_PACKET,
+	XBAPI_FRAME_XRX_INDIC,
+	XBAPI_FRAME_IO_DATA_RX,
+	XBAPI_FRAME_SENSOR_READ,
+	XBAPI_FRAME_NODE_ID,
+	XBAPI_FRAME_RMT_CMD_RES,
+	XBAPI_FRAME_UPDATE_STAT,
+	XBAPI_FRAME_RT_RC_INDIC,
+	XBAPI_FRAME_M_1_RT_REQ,
+	XBAPI_FRAME_INVALID
+} xbapi_frame_type_e;
+
+typedef enum {
+	XBAPI_OP_STATUS_OK,
+	XBAPI_OP_STATUS_ERROR,
+	XBAPI_OP_STATUS_INVALID_CMD,
+	XBAPI_OP_STATUS_INVALID_PARAM,
+	XBAPI_OP_STATUS_TX_FAILURE,
 	XBAPI_OP_STATUS_PENDING
 } xbapi_op_status_e;
 
 typedef enum {
-	XBAPI_MODEM_HARDWARE_RESET               = 0x00,
-	XBAPI_MODEM_WDT_RESET                    = 0x01,
-	XBAPI_MODEM_JOINED_NETWORK               = 0x02,
-	XBAPI_MODEM_DISASSOCIATED                = 0x03,
-	XBAPI_MODEM_COORDINATOR_STARTED          = 0x06,
-	XBAPI_MODEM_SECURITY_KEY_UPDATED         = 0x07,
-	XBAPI_MODEM_OVERVOLTAGE                  = 0x0D,
-	XBAPI_MODEM_CONFIG_CHANGED_WHILE_JOINING = 0x11,
-	XBAPI_MODEM_STACK_ERROR                  = 0x6F,
+	XBAPI_MODEM_HARDWARE_RESET,
+	XBAPI_MODEM_WDT_RESET,
+	XBAPI_MODEM_JOINED_NETWORK,
+	XBAPI_MODEM_DISASSOCIATED,
+	XBAPI_MODEM_COORDINATOR_STARTED,
+	XBAPI_MODEM_SECURITY_KEY_UPDATED,
+	XBAPI_MODEM_OVERVOLTAGE,
+	XBAPI_MODEM_CONFIG_CHANGED_WHILE_JOINING,
+	XBAPI_MODEM_STACK_ERROR,
 	XBAPI_MODEM_STATUS_UNKNOWN
 } xbapi_modem_status_e;
+
+typedef enum {
+	XBAPI_RX_OPT_ACKNOWLEDGE,
+	XBAPI_RX_OPT_BROADCAST,
+	XBAPI_RX_OPT_INVALID
+} xbapi_rx_opt_e;
+
+typedef enum {
+	XBAPI_DEVICE_TYPE_COORDINATOR,
+	XBAPI_DEVICE_TYPE_ROUTER,
+	XBAPI_DEVICE_TYPE_END_DEVICE,
+	XBAPI_DEVICE_TYPE_INVALID
+} xbapi_device_type_e;
+
+typedef enum {
+	XBAPI_SOURCE_EVENT_PUSHBUTTON,
+	XBAPI_SOURCE_EVENT_JOINED,
+	XBAPI_SOURCE_EVENT_POWER_CYCLE,
+	XBAPI_SOURCE_EVENT_INVALID
+} xbapi_source_event_e;
+
+typedef struct {
+	uint64_t source_address;
+	uint16_t source_network_address;
+	uint64_t remote_address;
+	uint16_t remote_network_address;
+	xbapi_rx_opt_e receive_options;
+	char *node_identifier;
+	uint16_t parent_network_address;
+	xbapi_device_type_e device_type;
+	xbapi_source_event_e source_event;
+	uint16_t profile_id;
+	uint16_t manufacturer_id;
+} xbapi_node_identification_t;
+
+
+typedef enum {
+	XBAPI_DELIVERY_STATUS_SUCCESS,
+	XBAPI_DELIVERY_STATUS_MAC_ACK_FAIL,
+	XBAPI_DELIVERY_STATUS_CCA_FAIL,
+	XBAPI_DELIVERY_STATUS_INVALID_DEST,
+	XBAPI_DELIVERY_STATUS_NET_ACK_FAIL,
+	XBAPI_DELIVERY_STATUS_NOT_JOINED,
+	XBAPI_DELIVERY_STATUS_SELF_ADDRESSED,
+	XBAPI_DELIVERY_STATUS_ADDRESS_NOT_FOUND,
+	XBAPI_DELIVERY_STATUS_ROUTE_NOT_FOUND,
+	XBAPI_DELIVERY_STATUS_NO_RELAY,
+	XBAPI_DELIVERY_STATUS_INVALID_BIND,
+	XBAPI_DELIVERY_STATUS_RESOURCE_1,
+	XBAPI_DELIVERY_STATUS_BROADCAST_APS,
+	XBAPI_DELIVERY_STATUS_UNICAST_APS,
+	XBAPI_DELIVERY_STATUS_RESOURCE_2,
+	XBAPI_DELIVERY_STATUS_TOO_LARGE,
+	XBAPI_DELIVERY_STATUS_INDIRECT,
+	XBAPI_DELIVERY_STATUS_INVALID
+} xbapi_delivery_status_e;
+
+typedef enum {
+	XBAPI_DISCOVERY_STATUS_NONE,
+	XBAPI_DISCOVERY_STATUS_ADDRESS,
+	XBAPI_DISCOVERY_STATUS_ROUTE,
+	XBAPI_DISCOVERY_STATUS_BOTH,
+	XBAPI_DISCOVERY_STATUS_TIMEOUT,
+	XBAPI_DISCOVERY_STATUS_INVALID
+} xbapi_discovery_status_e;
+
+typedef struct {
+	uint16_t delivery_network_address;
+	uint8_t retry_count;
+	xbapi_delivery_status_e delivery_status;
+	xbapi_discovery_status_e discovery_status;
+} xbapi_tx_status_t;
+
+typedef enum {
+	XBAPI_RX_OPTIONS_ACK,
+	XBAPI_RX_OPTIONS_BROADCAST,
+	XBAPI_RX_OPTIONS_ENCRYPTED,
+	XBAPI_RX_OPTIONS_END_DEVICE,
+	XBAPI_RX_OPTIONS_INVALID
+} xbapi_rx_options_e;
+
+typedef struct {
+	uint64_t source_address;
+	uint16_t source_network_address;
+	xbapi_rx_options_e options;
+	uint8_t *data;
+} xbapi_rx_packet_t;
+
+typedef struct {
+	void (*node_connected)(xbapi_node_identification_t *node);
+	void (*transmit_completed)(xbapi_tx_status_t *status);
+	void (*received_packet)(xbapi_rx_packet_t *received);
+} xbapi_callbacks_t;
+
+
 
 struct _xbapi_op_set_t;
 typedef struct _xbapi_op_set_t xbapi_op_set_t;
@@ -177,11 +294,12 @@ export const char *xbapi_strerror( xbapi_rc_t err );
 export xbapi_conn_t *xbapi_init_conn(int);
 export xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_at_arg_u *args, xbapi_op_t **out_op);
 export xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_op_t **out_op);
-export xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *op);
+export xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *op, xbapi_callbacks_t *callbacks);
 export xbapi_op_set_t *xbapi_init_op_set();
 export void xbapi_free_op_set(xbapi_op_set_t *set);
 export xbapi_op_status_e status_from_operation(xbapi_op_t *op);
 export uint8_t *data_from_operation(xbapi_op_t *op);
+export xbapi_rc_t xbapi_transmit_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, uint8_t *data, uint64_t destination, xbapi_op_t **out_op);
 
 #ifdef __cplusplus
 } /* end of extern "C" */

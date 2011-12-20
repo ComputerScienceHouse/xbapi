@@ -56,10 +56,10 @@ const char *xbapi_strerror( xbapi_rc_t rc ) {
 __attribute__((const))
 static bool is_control( uint8_t byte ) {
 	switch( byte ) {
-		case XBAPI_CONTROL_FRAME_DELIM:
-		case XBAPI_CONTROL_ESCAPE:
-		case XBAPI_CONTROL_XON:
-		case XBAPI_CONTROL_XOFF:
+		case _XBAPI_CONTROL_FRAME_DELIM:
+		case _XBAPI_CONTROL_ESCAPE:
+		case _XBAPI_CONTROL_XON:
+		case _XBAPI_CONTROL_XOFF:
 			return true;
 		default:
 			return false;
@@ -76,11 +76,11 @@ xbapi_rc_t xbapi_unescape( uint8_t **buf ) {
 	size_t blen = talloc_array_length(b), retlen = blen;
 	if( blen < 2 ) return xbapi_rc(XBAPI_ERR_NOERR);
 
-	for( size_t i = 0; i < blen; i++ ) if( b[i] == XBAPI_CONTROL_ESCAPE ) retlen--;
+	for( size_t i = 0; i < blen; i++ ) if( b[i] == _XBAPI_CONTROL_ESCAPE ) retlen--;
 
 	size_t retidx = 0, bidx = 0;
 	do {
-		if( b[bidx] == XBAPI_CONTROL_ESCAPE ) {
+		if( b[bidx] == _XBAPI_CONTROL_ESCAPE ) {
 			bidx++;
 			if( bidx >= blen ) return xbapi_rc(XBAPI_ERR_BADPACKET);
 			b[retidx] = b[bidx] ^ 0x20;
@@ -138,7 +138,7 @@ xbapi_rc_t xbapi_unwrap( uint8_t **buf ) {
 	assert(*buf != NULL);
 
 	uint8_t *b = *buf;
-	if( b[0] != XBAPI_CONTROL_FRAME_DELIM ) return xbapi_rc(XBAPI_ERR_BADPACKET);
+	if( b[0] != _XBAPI_CONTROL_FRAME_DELIM ) return xbapi_rc(XBAPI_ERR_BADPACKET);
 
 	xbapi_rc_t rc;
 	if( xbapi_errno(rc = xbapi_unescape(buf)) != XBAPI_ERR_NOERR ) return rc;
@@ -208,7 +208,7 @@ xbapi_rc_t xbapi_wrap( uint8_t **buf ) {
 	if( xbapi_errno(rc = xbapi_escape(buf)) != XBAPI_ERR_NOERR ) return rc;
 
 	// Restore the frame delimiter after we've escaped
-	b[0] = XBAPI_CONTROL_FRAME_DELIM;
+	b[0] = _XBAPI_CONTROL_FRAME_DELIM;
 
 	return xbapi_rc(XBAPI_ERR_NOERR);
 }
@@ -332,7 +332,7 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_
 
 	const char *cmdstr = at_cmd_str(command);
 	static const int PACKET_HEAD_LEN = 4;
-	uint8_t packet_head[] = { XBAPI_FRAME_AT_CMD, conn->frame_id, cmdstr[0], cmdstr[1] };
+	uint8_t packet_head[] = { _XBAPI_FRAME_AT_CMD, conn->frame_id, cmdstr[0], cmdstr[1] };
 	uint8_t *packet = NULL;
 
 	// Set up the operation structure (frame id, clear result)
@@ -478,7 +478,8 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_
 
 	// Copy the packet head into the packet and wrap it
 	memcpy(packet, packet_head, PACKET_HEAD_LEN);
-	xbapi_wrap(&packet);
+	rc = xbapi_wrap(&packet);
+	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 
 	return xbapi_send(conn, packet);
 }
@@ -492,14 +493,15 @@ xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_a
 
 	const char *cmdstr = at_cmd_str(command);
 	static const int PACKET_LEN = 4;
-	uint8_t packet_data[] = { XBAPI_FRAME_AT_CMD, conn->frame_id, cmdstr[0], cmdstr[1] };
+	uint8_t packet_data[] = { _XBAPI_FRAME_AT_CMD, conn->frame_id, cmdstr[0], cmdstr[1] };
 	uint8_t *packet = talloc_array_size(NULL, 1, PACKET_LEN);
 	memcpy(packet, packet_data, PACKET_LEN);
-	xbapi_wrap(&packet);
+	xbapi_rc_t rc = xbapi_wrap(&packet);
+	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 
 	// Set up the operation structure (frame id, clear result)
 	xbapi_op_t *op;
-	xbapi_rc_t rc = create_operation(ops, &op);
+	rc = create_operation(ops, &op);
 	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 	op->frame_id = conn->frame_id;
 	if (out_op != NULL) *out_op = op;
@@ -507,7 +509,11 @@ xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_a
 	return xbapi_send(conn, packet);
 }
 
-xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
+xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_callbacks_t *callbacks) {
+	assert(conn != NULL);
+	assert(ops != NULL);
+	assert(callbacks != NULL);
+
 	static const int BUF_SIZE = 100;
 	int buf_len = 0;
 	uint8_t buf[BUF_SIZE];
@@ -519,7 +525,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
 		buffer_len = talloc_array_length(conn->buffer);
 		conn->rollover_escape = false;
 		conn->buffer = talloc_realloc_size(conn, conn->buffer, buffer_len + 1);
-		conn->buffer[buffer_len] = XBAPI_CONTROL_ESCAPE;
+		conn->buffer[buffer_len] = _XBAPI_CONTROL_ESCAPE;
 	}
 
 	// Read the serial device and append the data to the existing buffer
@@ -538,7 +544,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
 	buffer_len = talloc_array_length(conn->buffer);
 	bool has_trailing = false;
 	for (uint8_t *ptr = conn->buffer + buffer_len - 1; ptr >= conn->buffer; ptr--) {
-		if (*ptr == XBAPI_CONTROL_ESCAPE) {
+		if (*ptr == _XBAPI_CONTROL_ESCAPE) {
 			has_trailing = !has_trailing;
 		} else
 			break;
@@ -560,7 +566,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
 	uint8_t *ptr = conn->buffer;
 	while (buffer_len > 0) {
 		// Toss out data until we find a frame start delimiter
-		while (*ptr != XBAPI_CONTROL_FRAME_DELIM && buffer_len > 0) {
+		while (*ptr != _XBAPI_CONTROL_FRAME_DELIM && buffer_len > 0) {
 			ptr++;
 			buffer_len--;
 		}
@@ -585,11 +591,11 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
 		packet_len = talloc_array_length(packet);
 
 		// Handle the message
+		uint8_t *data;
 		switch (frame_type_from_packet(packet)) {
 			case XBAPI_FRAME_AT_CMD_RES:
 				assert(packet_len >= AT_CMD_RES_MIN_LEN);
 
-				uint8_t *data;
 				if (command_data_len_from_at_cmd_res(packet)) {
 					data = talloc_array(NULL, uint8_t, command_data_len_from_at_cmd_res(packet));
 					if(conn->buffer == NULL) return xbapi_rc_sys();
@@ -617,55 +623,66 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
 				break;
 
 			case XBAPI_FRAME_TX_STAT:
+				assert(packet_len == TX_STAT_LEN);
+
+				// USE THIS frame_id_from_tx_stat(packet);
+				if (callbacks->transmit_completed == NULL) break;
+
+				xbapi_tx_status_t *status = talloc(NULL, xbapi_tx_status_t);
+
+				status->delivery_network_address = delivery_network_address_from_tx_stat(packet);
+				status->retry_count = retry_count_from_tx_stat(packet);
+				status->delivery_status = delivery_status_from_tx_stat(packet);
+				status->discovery_status = discovery_status_from_tx_stat(packet);
+
+				callbacks->transmit_completed(status);
+
+				talloc_free(status);
+				break;
+
 			case XBAPI_FRAME_RX_PACKET:
+				assert(packet_len >= RX_PACKET_MIN_LEN);
+
+				if (callbacks->node_connected == NULL) break;
+
+				xbapi_rx_packet_t *received = talloc(NULL, xbapi_rx_packet_t);
+
+				received->source_address = source_address_from_rx_packet(packet);
+				received->source_network_address = source_network_address_from_rx_packet(packet);
+				received->options = options_from_rx_packet(packet);
+
+				size_t data_len;
+				data = data_from_rx_packet(packet, &data_len);
+				received->data = talloc_array(received, uint8_t, data_len);
+				memcpy(received->data, data, data_len);
+
+				callbacks->received_packet(received);
+
+				talloc_free(received);
+				break;
+
 			case XBAPI_FRAME_NODE_ID:
 				assert(packet_len >= NODE_ID_MIN_LEN);
 
-				printf("Source Address: %llX\n", source_address_from_node_id(packet));
-				printf("Source Network Address: %X\n", source_network_address_from_node_id(packet));
-				switch (receive_options_from_node_id(packet)) {
-					case XBAPI_RX_OPT_ACKNOWLEDGE:
-						printf("Receive Options: Acknowledge\n");
-						break;
-					case XBAPI_RX_OPT_BROADCAST:
-						printf("Receive Options: Broadcast\n");
-						break;
-					case XBAPI_RX_OPT_INVALID:
-						printf("Receive Options: Invalid (%d)\n", packet[11]);
-				}
-				printf("Remote Address: %llX\n", remote_address_from_node_id(packet));
-				printf("Remote Network Address: %X\n", remote_network_address_from_node_id(packet));
-				printf("Node Identifier: %s\n", ni_string_from_node_id(packet));
-				printf("Parent Network Address: %X\n", parent_network_address_from_node_id(packet));
-				switch (device_type_from_node_id(packet)) {
-					case XBAPI_DEVICE_TYPE_COORDINATOR:
-						printf("Device Type: Coordinator\n");
-						break;
-					case XBAPI_DEVICE_TYPE_ROUTER:
-						printf("Device Type: Router\n");
-						break;
-					case XBAPI_DEVICE_TYPE_END_DEVICE:
-						printf("Device Type: End Device\n");
-						break;
-					case XBAPI_DEVICE_TYPE_INVALID:
-						printf("Device Type: Invalid\n");
-				}
-				switch (source_event_from_node_id(packet)) {
-					case XBAPI_SOURCE_EVENT_PUSHBUTTON:
-						printf("Source Event: Pushbutton\n");
-						break;
-					case XBAPI_SOURCE_EVENT_JOINED:
-						printf("Source Event: Joined\n");
-						break;
-					case XBAPI_SOURCE_EVENT_POWER_CYCLE:
-						printf("Source Event: Power Cycle\n");
-						break;
-					case XBAPI_SOURCE_EVENT_INVALID:
-						printf("Source Event: Invalid\n");
-				}
-				printf("Profile ID: %X\n", profile_id_from_node_id(packet));
-				printf("Manufacturer ID: %X\n", manufacturer_id_from_node_id(packet));
+				if (callbacks->node_connected == NULL) break;
 
+				xbapi_node_identification_t *node = talloc(NULL, xbapi_node_identification_t);
+
+				node->source_address         = source_address_from_node_id(packet);
+				node->source_network_address = source_network_address_from_node_id(packet);
+				node->remote_address         = remote_address_from_node_id(packet);
+				node->remote_network_address = remote_network_address_from_node_id(packet);
+				node->receive_options        = receive_options_from_node_id(packet);
+				node->node_identifier        = ni_string_from_node_id(packet);
+				node->parent_network_address = parent_network_address_from_node_id(packet);
+				node->device_type            = device_type_from_node_id(packet);
+				node->source_event           = source_event_from_node_id(packet);
+				node->profile_id             = profile_id_from_node_id(packet);
+				node->manufacturer_id        = manufacturer_id_from_node_id(packet);
+
+				callbacks->node_connected(node);
+
+				talloc_free(node);
 				break;
 
 			// We don't support these messages, so just ignore them
@@ -681,10 +698,11 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops) {
 			// We shouldn't receive these messages (these are host to xbee only)
 			case XBAPI_FRAME_AT_CMD:
 			case XBAPI_FRAME_AT_QUEUED:
+			case XBAPI_FRAME_TX_REQ:
 			case XBAPI_FRAME_XADDR_CMD:
 			case XBAPI_FRAME_RMT_CMD_REQ:
 			case XBAPI_FRAME_CRT_SRC_RT:
-			default:
+			case XBAPI_FRAME_INVALID:
 				assert(false);
 		}
 
@@ -800,5 +818,40 @@ xbapi_op_status_e status_from_operation(xbapi_op_t *op) {
 uint8_t *data_from_operation(xbapi_op_t *op) {
 	assert(op != NULL);
 	return op->data;
+}
+
+xbapi_rc_t xbapi_transmit_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, uint8_t *data, uint64_t destination, xbapi_op_t **out_op) {
+	size_t data_len = talloc_array_length(data);
+	uint8_t *packet = talloc_array(NULL, uint8_t, 14 + data_len);
+
+	conn->frame_id++;
+	if (conn->frame_id == 0) conn->frame_id++;
+
+	// Specify the frame type and id
+	packet[0] = _XBAPI_FRAME_TX_REQ;
+	packet[1] = conn->frame_id;
+	// Set the destination address
+	*((uint64_t *)(packet + 2)) = htonll(destination);
+	// Set the destination network address to unknown
+	packet[10] = 0xFF;
+	packet[11] = 0xFE;
+	// Set broadcast radius to the maximum
+	packet[12] = 0x00;
+	// No additional options
+	packet[13] = 0x00;
+	// Append the data
+	memcpy(packet + 14, data, data_len);
+
+	xbapi_rc_t rc = xbapi_wrap(&packet);
+	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
+
+	// Set up the operation structure (frame id, clear result)
+	xbapi_op_t *op;
+	rc = create_operation(ops, &op);
+	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
+	op->frame_id = conn->frame_id;
+	*out_op = op;
+
+	return xbapi_send(conn, packet);
 }
 
