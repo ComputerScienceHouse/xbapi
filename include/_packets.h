@@ -138,4 +138,14 @@ uint16_t source_network_address_from_rx_packet(uint8_t *packet);
 xbapi_rx_options_e options_from_rx_packet(uint8_t *packet);
 uint8_t *data_from_rx_packet(uint8_t *packet, size_t *len);
 
+
+
+static inline uint64_t ntohll(uint64_t data) {
+	return ((uint64_t)ntohl((uint32_t)data) << 32 | ntohl((uint32_t)(data >> 32)));
+}
+
+static inline uint64_t htonll(uint64_t data) {
+	return ntohll(data);
+}
+
 #endif /* ___PACKETS_H__ */

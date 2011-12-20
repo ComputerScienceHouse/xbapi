@@ -2,14 +2,6 @@
 #include <talloc.h>
 #include "_packets.h"
 
-static inline uint64_t ntohll(uint64_t data) {
-	return ((uint64_t)ntohl((uint32_t)data) << 32 | ntohl((uint32_t)(data >> 32)));
-}
-
-static inline uint64_t htonll(uint64_t data) {
-	return ntohll(data);
-}
-
 xbapi_frame_type_e frame_type_from_packet(uint8_t *packet) {
 	switch (packet[0]) {
 		case  _XBAPI_FRAME_AT_CMD:

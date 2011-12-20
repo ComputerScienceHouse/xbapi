@@ -299,6 +299,7 @@ export xbapi_op_set_t *xbapi_init_op_set();
 export void xbapi_free_op_set(xbapi_op_set_t *set);
 export xbapi_op_status_e status_from_operation(xbapi_op_t *op);
 export uint8_t *data_from_operation(xbapi_op_t *op);
+export xbapi_rc_t xbapi_transmit_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, uint8_t *data, uint64_t destination, xbapi_op_t **out_op);
 
 #ifdef __cplusplus
 } /* end of extern "C" */

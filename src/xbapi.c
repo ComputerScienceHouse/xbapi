@@ -479,7 +479,8 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_
 
 	// Copy the packet head into the packet and wrap it
 	memcpy(packet, packet_head, PACKET_HEAD_LEN);
-	xbapi_wrap(&packet);
+	rc = xbapi_wrap(&packet);
+	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 
 	return xbapi_send(conn, packet);
 }
@@ -497,11 +498,12 @@ xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_a
 	uint8_t packet_data[] = { _XBAPI_FRAME_AT_CMD, conn->frame_id, cmdstr[0], cmdstr[1] };
 	uint8_t *packet = talloc_array_size(NULL, 1, PACKET_LEN);
 	memcpy(packet, packet_data, PACKET_LEN);
-	xbapi_wrap(&packet);
+	xbapi_rc_t rc = xbapi_wrap(&packet);
+	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 
 	// Set up the operation structure (frame id, clear result)
 	xbapi_op_t *op;
-	xbapi_rc_t rc = create_operation(ops, &op);
+	rc = create_operation(ops, &op);
 	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 	op->frame_id = conn->frame_id;
 	*out_op = op;
@@ -817,5 +819,40 @@ xbapi_op_status_e status_from_operation(xbapi_op_t *op) {
 uint8_t *data_from_operation(xbapi_op_t *op) {
 	assert(op != NULL);
 	return op->data;
+}
+
+xbapi_rc_t xbapi_transmit_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, uint8_t *data, uint64_t destination, xbapi_op_t **out_op) {
+	size_t data_len = talloc_array_length(data);
+	uint8_t *packet = talloc_array(NULL, uint8_t, 14 + data_len);
+
+	conn->frame_id++;
+	if (conn->frame_id == 0) conn->frame_id++;
+
+	// Specify the frame type and id
+	packet[0] = _XBAPI_FRAME_TX_REQ;
+	packet[1] = conn->frame_id;
+	// Set the destination address
+	*((uint64_t *)(packet + 2)) = htonll(destination);
+	// Set the destination network address to unknown
+	packet[10] = 0xFF;
+	packet[11] = 0xFE;
+	// Set broadcast radius to the maximum
+	packet[12] = 0x00;
+	// No additional options
+	packet[13] = 0x00;
+	// Append the data
+	memcpy(packet + 14, data, data_len);
+
+	xbapi_rc_t rc = xbapi_wrap(&packet);
+	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
+
+	// Set up the operation structure (frame id, clear result)
+	xbapi_op_t *op;
+	rc = create_operation(ops, &op);
+	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
+	op->frame_id = conn->frame_id;
+	*out_op = op;
+
+	return xbapi_send(conn, packet);
 }
 
