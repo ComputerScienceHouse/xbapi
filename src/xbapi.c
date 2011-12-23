@@ -611,7 +611,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 					xbapi_op_t *op = ops->ops_pending[i];
 					if (op->frame_id == frame_id) {
 						op->status = command_status_from_at_cmd_res(packet);
-						op->data = data;
+						op->response_data = data;
 
 						if (callbacks->operation_completed == NULL) {
 							move_operation(ops, op);
@@ -645,10 +645,10 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 				for (size_t i = 0; i < ops->pending_count; i++) {
 					xbapi_op_t *op = ops->ops_pending[i];
 					if (op->frame_id == frame_id) {
-						//op->status = command_status_from_at_cmd_res(packet);
-						//op->data = data;
-						op->status = 0;
-						op->data = NULL;
+						op->status = command_status_from_at_cmd_res(packet);
+						//op->response_data = data;
+						//op->status = 0;
+						op->response_data = NULL;
 
 						if (callbacks->operation_completed == NULL) {
 							move_operation(ops, op);
@@ -888,9 +888,19 @@ xbapi_op_status_e status_from_operation(xbapi_op_t *op) {
 	return op->status;
 }
 
-uint8_t *data_from_operation(xbapi_op_t *op) {
+uint8_t *response_data_from_operation(xbapi_op_t *op) {
 	assert(op != NULL);
-	return op->data;
+	return op->response_data;
+}
+
+void *user_data_from_operation(xbapi_op_t *op) {
+	assert(op != NULL);
+	return op->user_data;
+}
+
+void set_user_data(xbapi_op_t *op, void *data) {
+	assert(op != NULL);
+	op->user_data = data;
 }
 
 xbapi_rc_t xbapi_transmit_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, uint8_t *data, uint64_t destination, xbapi_op_t **out_op) {

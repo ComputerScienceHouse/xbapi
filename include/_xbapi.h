@@ -10,7 +10,8 @@ static const int INITIAL_OP_SET_SIZE = 5;
 struct _xbapi_op_t {
 	uint8_t frame_id;
 	xbapi_op_status_e status;
-	uint8_t *data;
+	uint8_t *response_data;
+	void *user_data;
 };
 
 struct _xbapi_op_set_t {
