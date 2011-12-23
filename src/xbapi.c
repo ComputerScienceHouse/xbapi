@@ -617,9 +617,9 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 							move_operation(ops, op);
 						} else {
 							if (callbacks->operation_completed(op)) {
-								move_operation(ops, op);
-							} else {
 								remove_operation(ops, op);
+							} else {
+								move_operation(ops, op);
 							}
 						}
 						break;
