@@ -509,7 +509,7 @@ xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_a
 	return xbapi_send(conn, packet);
 }
 
-xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_callbacks_t *callbacks) {
+xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_callbacks_t *callbacks, void *user_data) {
 	assert(conn != NULL);
 	assert(ops != NULL);
 	assert(callbacks != NULL);
@@ -616,7 +616,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 						if (callbacks->operation_completed == NULL) {
 							move_operation(ops, op);
 						} else {
-							if (callbacks->operation_completed(op)) {
+							if (callbacks->operation_completed(op, user_data)) {
 								remove_operation(ops, op);
 							} else {
 								move_operation(ops, op);
@@ -632,7 +632,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 				conn->latest_modem_status = status_from_modem_stat(packet);
 
 				if (callbacks->modem_changed != NULL) {
-					callbacks->modem_changed(conn->latest_modem_status);
+					callbacks->modem_changed(conn->latest_modem_status, user_data);
 				}
 
 				break;
@@ -653,7 +653,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 						if (callbacks->operation_completed == NULL) {
 							move_operation(ops, op);
 						} else {
-							if (callbacks->operation_completed(op)) {
+							if (callbacks->operation_completed(op, user_data)) {
 								move_operation(ops, op);
 							} else {
 								remove_operation(ops, op);
@@ -672,7 +672,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 				status->delivery_status = delivery_status_from_tx_stat(packet);
 				status->discovery_status = discovery_status_from_tx_stat(packet);
 
-				callbacks->transmit_completed(status);
+				callbacks->transmit_completed(status, user_data);
 
 				talloc_free(status);
 				break;
@@ -693,7 +693,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 				received->data = talloc_array(received, uint8_t, data_len);
 				memcpy(received->data, data, data_len);
 
-				callbacks->received_packet(received);
+				callbacks->received_packet(received, user_data);
 
 				talloc_free(received);
 				break;
@@ -717,7 +717,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 				node->profile_id             = profile_id_from_node_id(packet);
 				node->manufacturer_id        = manufacturer_id_from_node_id(packet);
 
-				callbacks->node_connected(node);
+				callbacks->node_connected(node, user_data);
 
 				talloc_free(node);
 				break;

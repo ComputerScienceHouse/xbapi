@@ -283,11 +283,11 @@ export int xbapi_sys_errno( xbapi_rc_t err );
 
 
 typedef struct {
-	void (*node_connected)(xbapi_node_identification_t *node);
-	void (*transmit_completed)(xbapi_tx_status_t *status);
-	void (*received_packet)(xbapi_rx_packet_t *received);
-	void (*modem_changed)(xbapi_modem_status_e status);
-	bool (*operation_completed)(xbapi_op_t *op);
+	void (*node_connected)(xbapi_node_identification_t *node, void *user_data);
+	void (*transmit_completed)(xbapi_tx_status_t *status, void *user_data);
+	void (*received_packet)(xbapi_rx_packet_t *received, void *user_data);
+	void (*modem_changed)(xbapi_modem_status_e status, void *user_data);
+	bool (*operation_completed)(xbapi_op_t *op, void *user_data);
 } xbapi_callbacks_t;
 
 
@@ -300,7 +300,7 @@ export const char *xbapi_strerror( xbapi_rc_t err );
 export xbapi_conn_t *xbapi_init_conn(int);
 export xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_at_arg_u *args, xbapi_op_t **out_op);
 export xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_e command, xbapi_op_t **out_op);
-export xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *op, xbapi_callbacks_t *callbacks);
+export xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *op, xbapi_callbacks_t *callbacks, void *user_data);
 export xbapi_op_set_t *xbapi_init_op_set();
 export void xbapi_free_op_set(xbapi_op_set_t *set);
 export xbapi_op_status_e status_from_operation(xbapi_op_t *op);
