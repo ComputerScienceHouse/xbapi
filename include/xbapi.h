@@ -160,11 +160,17 @@ typedef enum {
 } xbapi_frame_type_e;
 
 typedef enum {
-	XBAPI_OP_STATUS_OK,
-	XBAPI_OP_STATUS_ERROR,
-	XBAPI_OP_STATUS_INVALID_CMD,
-	XBAPI_OP_STATUS_INVALID_PARAM,
-	XBAPI_OP_STATUS_TX_FAILURE,
+	XBAPI_AT_CMD_STATUS_OK,
+	XBAPI_AT_CMD_STATUS_ERROR,
+	XBAPI_AT_CMD_STATUS_INVALID_CMD,
+	XBAPI_AT_CMD_STATUS_INVALID_PARAM,
+	XBAPI_AT_CMD_STATUS_TX_FAILURE,
+	XBAPI_AT_CMD_STATUS_INVALID
+} xbapi_at_cmd_status_e;
+
+typedef enum {
+	XBAPI_OP_STATUS_SUCCESS,
+	XBAPI_OP_STATUS_FAILURE,
 	XBAPI_OP_STATUS_PENDING
 } xbapi_op_status_e;
 
@@ -309,6 +315,7 @@ export void *user_data_from_operation(xbapi_op_t *op);
 export void set_user_data(xbapi_op_t *op, void *data);
 export xbapi_rc_t xbapi_transmit_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, uint8_t *data, uint64_t destination, xbapi_op_t **out_op);
 export xbapi_rc_t remove_operation(xbapi_op_set_t *set, xbapi_op_t *op);
+export const char *xbapi_error_str_from_operation(xbapi_op_t *op);
 
 #ifdef __cplusplus
 } /* end of extern "C" */

@@ -22,11 +22,11 @@
 #define _XBAPI_FRAME_RT_RC_INDIC 0xA1
 #define _XBAPI_FRAME_M_1_RT_REQ  0xA3
 
-#define _XBAPI_OP_STATUS_OK            0x00
-#define _XBAPI_OP_STATUS_ERROR         0x01
-#define _XBAPI_OP_STATUS_INVALID_CMD   0x02
-#define _XBAPI_OP_STATUS_INVALID_PARAM 0x03
-#define _XBAPI_OP_STATUS_TX_FAILURE    0x04
+#define _XBAPI_AT_CMD_STATUS_OK            0x00
+#define _XBAPI_AT_CMD_STATUS_ERROR         0x01
+#define _XBAPI_AT_CMD_STATUS_INVALID_CMD   0x02
+#define _XBAPI_AT_CMD_STATUS_INVALID_PARAM 0x03
+#define _XBAPI_AT_CMD_STATUS_TX_FAILURE    0x04
 
 #define _XBAPI_MODEM_HARDWARE_RESET               0x00
 #define _XBAPI_MODEM_WDT_RESET                    0x01
@@ -92,7 +92,7 @@ static const unsigned int AT_CMD_RES_MIN_LEN = 5;
 
 uint8_t frame_id_from_at_cmd_res(uint8_t *packet);
 char *at_command_from_at_cmd_res(uint8_t *packet);
-xbapi_op_status_e command_status_from_at_cmd_res(uint8_t *packet);
+xbapi_at_cmd_status_e command_status_from_at_cmd_res(uint8_t *packet);
 size_t command_data_len_from_at_cmd_res(uint8_t *packet);
 uint8_t *command_data_from_at_cmd_res(uint8_t *packet);
 

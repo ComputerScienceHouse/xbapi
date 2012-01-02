@@ -57,20 +57,20 @@ char *at_command_from_at_cmd_res(uint8_t *packet) {
 	return (char *)(packet + 2);
 }
 
-xbapi_op_status_e command_status_from_at_cmd_res(uint8_t *packet) {
+xbapi_at_cmd_status_e command_status_from_at_cmd_res(uint8_t *packet) {
 	switch (packet[4]) {
-		case  _XBAPI_OP_STATUS_OK:
-		return XBAPI_OP_STATUS_OK;
-		case  _XBAPI_OP_STATUS_ERROR:
-		return XBAPI_OP_STATUS_ERROR;
-		case  _XBAPI_OP_STATUS_INVALID_CMD:
-		return XBAPI_OP_STATUS_INVALID_CMD;
-		case  _XBAPI_OP_STATUS_INVALID_PARAM:
-		return XBAPI_OP_STATUS_INVALID_PARAM;
-		case  _XBAPI_OP_STATUS_TX_FAILURE:
-		return XBAPI_OP_STATUS_TX_FAILURE;
+		case  _XBAPI_AT_CMD_STATUS_OK:
+		return XBAPI_AT_CMD_STATUS_OK;
+		case  _XBAPI_AT_CMD_STATUS_ERROR:
+		return XBAPI_AT_CMD_STATUS_ERROR;
+		case  _XBAPI_AT_CMD_STATUS_INVALID_CMD:
+		return XBAPI_AT_CMD_STATUS_INVALID_CMD;
+		case  _XBAPI_AT_CMD_STATUS_INVALID_PARAM:
+		return XBAPI_AT_CMD_STATUS_INVALID_PARAM;
+		case  _XBAPI_AT_CMD_STATUS_TX_FAILURE:
+		return XBAPI_AT_CMD_STATUS_TX_FAILURE;
 		default:
-		return XBAPI_OP_STATUS_PENDING;
+		return XBAPI_AT_CMD_STATUS_INVALID;
 	}
 }
 

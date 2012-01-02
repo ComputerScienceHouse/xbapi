@@ -7,9 +7,19 @@
 
 static const int INITIAL_OP_SET_SIZE = 5;
 
+typedef enum {
+	XBAPI_OP_TYPE_CMD,
+	XBAPI_OP_TYPE_TX
+} xbapi_op_type_e;
+
 struct _xbapi_op_t {
 	uint8_t frame_id;
 	xbapi_op_status_e status;
+	xbapi_op_type_e type;
+	union {
+		xbapi_delivery_status_e delivery_status;
+		xbapi_at_cmd_status_e at_cmd_status;
+	};
 	uint8_t *response_data;
 	void *user_data;
 };
