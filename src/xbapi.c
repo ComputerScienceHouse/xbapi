@@ -340,6 +340,7 @@ xbapi_rc_t xbapi_set_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_at_
 	xbapi_rc_t rc = create_operation(ops, &op);
 	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 	op->frame_id = conn->frame_id;
+	op->type = XBAPI_OP_TYPE_CMD;
 	if (out_op != NULL) *out_op = op;
 
 	// Allocate space for the packet and copy the args into it
@@ -504,12 +505,13 @@ xbapi_rc_t xbapi_query_at_param(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_a
 	rc = create_operation(ops, &op);
 	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
 	op->frame_id = conn->frame_id;
+	op->type = XBAPI_OP_TYPE_CMD;
 	if (out_op != NULL) *out_op = op;
 
 	return xbapi_send(conn, packet);
 }
 
-xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_callbacks_t *callbacks) {
+xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_callbacks_t *callbacks, void *user_data) {
 	assert(conn != NULL);
 	assert(ops != NULL);
 	assert(callbacks != NULL);
@@ -610,16 +612,21 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 				for (size_t i = 0; i < ops->pending_count; i++) {
 					xbapi_op_t *op = ops->ops_pending[i];
 					if (op->frame_id == frame_id) {
-						op->status = command_status_from_at_cmd_res(packet);
-						op->data = data;
+						op->at_cmd_status = command_status_from_at_cmd_res(packet);
+						if (op->at_cmd_status == XBAPI_AT_CMD_STATUS_OK)
+							op->status = XBAPI_OP_STATUS_SUCCESS;
+						else
+							op->status = XBAPI_OP_STATUS_FAILURE;
+
+						op->response_data = data;
 
 						if (callbacks->operation_completed == NULL) {
 							move_operation(ops, op);
 						} else {
-							if (callbacks->operation_completed(op)) {
-								move_operation(ops, op);
-							} else {
+							if (callbacks->operation_completed(op, user_data)) {
 								remove_operation(ops, op);
+							} else {
+								move_operation(ops, op);
 							}
 						}
 						break;
@@ -632,7 +639,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 				conn->latest_modem_status = status_from_modem_stat(packet);
 
 				if (callbacks->modem_changed != NULL) {
-					callbacks->modem_changed(conn->latest_modem_status);
+					callbacks->modem_changed(conn->latest_modem_status, user_data);
 				}
 
 				break;
@@ -645,15 +652,18 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 				for (size_t i = 0; i < ops->pending_count; i++) {
 					xbapi_op_t *op = ops->ops_pending[i];
 					if (op->frame_id == frame_id) {
-						//op->status = command_status_from_at_cmd_res(packet);
-						//op->data = data;
-						op->status = 0;
-						op->data = NULL;
+						op->delivery_status = delivery_status_from_tx_stat(packet);
+						if (op->delivery_status == XBAPI_DELIVERY_STATUS_SUCCESS)
+							op->status = XBAPI_OP_STATUS_SUCCESS;
+						else
+							op->status = XBAPI_OP_STATUS_FAILURE;
+
+						op->response_data = NULL;
 
 						if (callbacks->operation_completed == NULL) {
 							move_operation(ops, op);
 						} else {
-							if (callbacks->operation_completed(op)) {
+							if (callbacks->operation_completed(op, user_data)) {
 								move_operation(ops, op);
 							} else {
 								remove_operation(ops, op);
@@ -672,7 +682,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 				status->delivery_status = delivery_status_from_tx_stat(packet);
 				status->discovery_status = discovery_status_from_tx_stat(packet);
 
-				callbacks->transmit_completed(status);
+				callbacks->transmit_completed(status, user_data);
 
 				talloc_free(status);
 				break;
@@ -680,7 +690,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 			case XBAPI_FRAME_RX_PACKET:
 				assert(packet_len >= RX_PACKET_MIN_LEN);
 
-				if (callbacks->node_connected == NULL) break;
+				if (callbacks->received_packet == NULL) break;
 
 				xbapi_rx_packet_t *received = talloc(NULL, xbapi_rx_packet_t);
 
@@ -693,7 +703,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 				received->data = talloc_array(received, uint8_t, data_len);
 				memcpy(received->data, data, data_len);
 
-				callbacks->received_packet(received);
+				callbacks->received_packet(received, user_data);
 
 				talloc_free(received);
 				break;
@@ -717,7 +727,7 @@ xbapi_rc_t xbapi_process_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, xbapi_cal
 				node->profile_id             = profile_id_from_node_id(packet);
 				node->manufacturer_id        = manufacturer_id_from_node_id(packet);
 
-				callbacks->node_connected(node);
+				callbacks->node_connected(node, user_data);
 
 				talloc_free(node);
 				break;
@@ -793,6 +803,7 @@ xbapi_rc_t create_operation(xbapi_op_set_t *set, xbapi_op_t **op) {
 	assert(op != NULL);
 
 	*op = talloc(set, xbapi_op_t);
+	if (*op == NULL) return xbapi_rc_sys();
 	(*op)->status = XBAPI_OP_STATUS_PENDING;
 
 	xbapi_rc_t rc = move_operation(set, *op);
@@ -813,7 +824,7 @@ xbapi_rc_t move_operation(xbapi_op_set_t *set, xbapi_op_t *op) {
 
 	// Copy the operation into the appropriate queue
 	switch (op->status) {
-		case XBAPI_OP_STATUS_OK:
+		case XBAPI_OP_STATUS_SUCCESS:
 			if (set->success_count == talloc_array_length(set->ops_success)) {
 				set->ops_success = talloc_realloc_size(set, set->ops_success, talloc_array_length(set->ops_success) + INITIAL_OP_SET_SIZE);
 				if (set->ops_success == NULL) return xbapi_rc_sys();
@@ -821,10 +832,7 @@ xbapi_rc_t move_operation(xbapi_op_set_t *set, xbapi_op_t *op) {
 			set->ops_success[set->success_count] = op;
 			set->success_count++;
 			break;
-		case XBAPI_OP_STATUS_ERROR:
-		case XBAPI_OP_STATUS_INVALID_CMD:
-		case XBAPI_OP_STATUS_INVALID_PARAM:
-		case XBAPI_OP_STATUS_TX_FAILURE:
+		case XBAPI_OP_STATUS_FAILURE:
 			if (set->failure_count == talloc_array_length(set->ops_failure)) {
 				set->ops_failure = talloc_realloc_size(set, set->ops_failure, talloc_array_length(set->ops_failure) + INITIAL_OP_SET_SIZE);
 				if (set->ops_failure == NULL) return xbapi_rc_sys();
@@ -850,14 +858,11 @@ xbapi_rc_t remove_operation(xbapi_op_set_t *set, xbapi_op_t *op) {
 	xbapi_op_t **list = NULL;
 
 	switch (op->status) {
-		case XBAPI_OP_STATUS_OK:
+		case XBAPI_OP_STATUS_SUCCESS:
 			count = &set->success_count;
 			list = set->ops_success;
 			break;
-		case XBAPI_OP_STATUS_ERROR:
-		case XBAPI_OP_STATUS_INVALID_CMD:
-		case XBAPI_OP_STATUS_INVALID_PARAM:
-		case XBAPI_OP_STATUS_TX_FAILURE:
+		case XBAPI_OP_STATUS_FAILURE:
 			count = &set->failure_count;
 			list = set->ops_failure;
 			break;
@@ -878,7 +883,49 @@ xbapi_rc_t remove_operation(xbapi_op_set_t *set, xbapi_op_t *op) {
 		}
 	}
 
+	talloc_free(op);
+
 	return xbapi_rc(XBAPI_ERR_NOERR);
+}
+
+const char *xbapi_error_str_from_operation(xbapi_op_t *op) {
+	static char * const delivery_errors[] = {
+		[XBAPI_DELIVERY_STATUS_SUCCESS]           = "success",
+		[XBAPI_DELIVERY_STATUS_MAC_ACK_FAIL]      = "MAC ACK failure",
+		[XBAPI_DELIVERY_STATUS_CCA_FAIL]          = "CCA failure",
+		[XBAPI_DELIVERY_STATUS_INVALID_DEST]      = "invalid destination endpoint",
+		[XBAPI_DELIVERY_STATUS_NET_ACK_FAIL]      = "network ACK failure",
+		[XBAPI_DELIVERY_STATUS_NOT_JOINED]        = "not joined to network",
+		[XBAPI_DELIVERY_STATUS_SELF_ADDRESSED]    = "self-addressed",
+		[XBAPI_DELIVERY_STATUS_ADDRESS_NOT_FOUND] = "address not found",
+		[XBAPI_DELIVERY_STATUS_ROUTE_NOT_FOUND]   = "route not found",
+		[XBAPI_DELIVERY_STATUS_NO_RELAY]          = "broadcast source failed to hear a neighbor relay this message",
+		[XBAPI_DELIVERY_STATUS_INVALID_BIND]      = "invalid binding table index",
+		[XBAPI_DELIVERY_STATUS_RESOURCE_1]        = "resouce error lack of free buffers, timers, etc.",
+		[XBAPI_DELIVERY_STATUS_BROADCAST_APS]     = "attempted broadcast with APS transmission",
+		[XBAPI_DELIVERY_STATUS_UNICAST_APS]       = "attempted unicast with APS transmission, but EE = 0",
+		[XBAPI_DELIVERY_STATUS_RESOURCE_2]        = "resouce error lack of free buffers, timers, etc.",
+		[XBAPI_DELIVERY_STATUS_TOO_LARGE]         = "data payload too large",
+		[XBAPI_DELIVERY_STATUS_INDIRECT]          = "indirect message unrequested",
+		[XBAPI_DELIVERY_STATUS_INVALID]           = "invalid status returned"
+	};
+	static char * const cmd_errors[] = {
+		[XBAPI_AT_CMD_STATUS_OK]            = "success",
+		[XBAPI_AT_CMD_STATUS_ERROR]         = "error",
+		[XBAPI_AT_CMD_STATUS_INVALID_CMD]   = "invalid command",
+		[XBAPI_AT_CMD_STATUS_INVALID_PARAM] = "invalid parameter",
+		[XBAPI_AT_CMD_STATUS_TX_FAILURE]    = "TX failure",
+		[XBAPI_AT_CMD_STATUS_INVALID]       = "invalid status returned"
+	};
+
+	switch (op->type) {
+		case XBAPI_OP_TYPE_TX:
+			return delivery_errors[op->delivery_status];
+		case XBAPI_OP_TYPE_CMD:
+			return cmd_errors[op->at_cmd_status];
+		default:
+			return "invalid operation structure";
+	}
 }
 
 // Get the list of successes and failures
@@ -888,9 +935,19 @@ xbapi_op_status_e status_from_operation(xbapi_op_t *op) {
 	return op->status;
 }
 
-uint8_t *data_from_operation(xbapi_op_t *op) {
+uint8_t *response_data_from_operation(xbapi_op_t *op) {
 	assert(op != NULL);
-	return op->data;
+	return op->response_data;
+}
+
+void *user_data_from_operation(xbapi_op_t *op) {
+	assert(op != NULL);
+	return op->user_data;
+}
+
+void set_user_data(xbapi_op_t *op, void *data) {
+	assert(op != NULL);
+	op->user_data = data;
 }
 
 xbapi_rc_t xbapi_transmit_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, uint8_t *data, uint64_t destination, xbapi_op_t **out_op) {
@@ -922,7 +979,10 @@ xbapi_rc_t xbapi_transmit_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, uint8_t 
 	xbapi_op_t *op;
 	rc = create_operation(ops, &op);
 	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
+
 	op->frame_id = conn->frame_id;
+	op->type = XBAPI_OP_TYPE_TX;
+
 	if (out_op != NULL) *out_op = op;
 
 	return xbapi_send(conn, packet);
