@@ -979,16 +979,12 @@ xbapi_rc_t xbapi_transmit_data(xbapi_conn_t *conn, xbapi_op_set_t *ops, uint8_t 
 	xbapi_op_t *op;
 	rc = create_operation(ops, &op);
 	if (xbapi_errno(rc) != XBAPI_ERR_NOERR) return rc;
+
 	op->frame_id = conn->frame_id;
 	op->type = XBAPI_OP_TYPE_TX;
 
-	// NOTE: Known bug
-	// If the out_op assignment is moved above the xbapi_send call, out_op is zero'd on return.
-	// From what I can tell this looks to be a stack corruption bug (that I'm sure will bite us
-	// in the ass later on). Please fix this.
-	rc = xbapi_send(conn, packet);
 	if (out_op != NULL) *out_op = op;
 
-	return rc;
+	return xbapi_send(conn, packet);
 }
 

@@ -132,9 +132,9 @@ typedef union {
 
 typedef struct {
 	xbapi_err_e code;
-	union {
+	//union {
 		int sys_errno;
-	};
+	//};
 } xbapi_rc_t;
 
 typedef enum {
